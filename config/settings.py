@@ -147,7 +147,7 @@ if not DEBUG:
 # Change this folder if you want backups saved somewhere else.
 # Example on Windows:
 # HR_BACKUP_ROOT = Path(r"C:/Users/AbuNour/Desktop/HR_System_Backups")
-HR_BACKUP_ROOT = Path.home() / "Desktop" / "HR_System_Backups"
+HR_BACKUP_ROOT = Path.home() / "Desktop" / "NourAxis_Backups"
 
 # Only these project items will be included in the generated zip.
 HR_BACKUP_INCLUDE_PATHS = [
@@ -179,7 +179,7 @@ HR_BACKUP_EXCLUDE_DIR_NAMES = {
     "env",
     "site-packages",
     "staticfiles",
-    "HR_System_Backups",
+    "NourAxis_Backups",
     "system_backups",
 }
 
