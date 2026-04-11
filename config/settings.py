@@ -121,7 +121,7 @@ STORAGES = {
 }
 
 MEDIA_URL = "media/"
-MEDIA_ROOT = Path(os.environ.get("RENDER_DISK_MOUNT_PATH", "/var/data")) / "media"
+MEDIA_ROOT = Path(os.environ.get("RENDER_DISK_MOUNT_PATH", "/var/data/media")) 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
