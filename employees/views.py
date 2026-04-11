@@ -1837,6 +1837,10 @@ class EmployeeCreateView(LoginRequiredMixin, CreateView):
 
         messages.success(self.request, "Employee created successfully.")
         return response
+    def form_invalid(self, form):
+        messages.error(self.request, "Employee could not be saved. Please review the form errors and try again.")
+        return super().form_invalid(form)
+
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1888,7 +1892,10 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
 
         messages.success(self.request, "Employee updated successfully.")
         return response
-
+    def form_invalid(self, form):
+        messages.error(self.request, "Employee could not be updated. Please review the form errors and try again.")
+        return super().form_invalid(form)
+    
     def get_success_url(self):
         return reverse("employees:employee_detail", kwargs={"pk": self.object.pk})
 
