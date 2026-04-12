@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import TemplateView
@@ -19,7 +20,7 @@ from django.views.generic import TemplateView
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-from employees.models import Employee, EmployeeAttendanceLedger, EmployeeLeave
+from employees.models import Employee, EmployeeAttendanceEvent, EmployeeAttendanceLedger, EmployeeLeave
 from organization.models import (
     Branch,
     BranchDocument,
@@ -78,7 +79,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
         )
 
     def can_access_dashboard(self, user):
-        return self.is_management_user(user)
+        return bool(self.is_management_user(user) or self.is_employee_role_user(user))
 
     def handle_no_permission(self):
         user = getattr(self.request, "user", None)
@@ -90,7 +91,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
 
         linked_employee = self.get_employee_profile()
         if linked_employee:
-            return redirect("employees:employee_detail", pk=linked_employee.pk)
+            return redirect("employees:self_service_profile")
 
         raise PermissionDenied("You do not have permission to access the dashboard.")
 
@@ -126,13 +127,13 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
             .filter(branch_id=employee.branch_id, is_active=True)
             .order_by("full_name")
         )
-        groups = {"Supervisor": [], "Team Leader": [], "Team Members": []}
+        groups = {"Supervisor": [], "Team Leaders": [], "Team Members": []}
         for member in branch_team_members:
             title = (member.job_title.name if member.job_title else "").lower()
             if "supervisor" in title:
                 groups["Supervisor"].append(member)
             elif "team leader" in title or title == "leader" or title.endswith(" leader"):
-                groups["Team Leader"].append(member)
+                groups["Team Leaders"].append(member)
             else:
                 groups["Team Members"].append(member)
         return [{"label": label, "members": members} for label, members in groups.items() if members]
@@ -449,6 +450,14 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                     "cancelled_request_count": leave_qs.filter(status=EmployeeLeave.STATUS_CANCELLED).count(),
                     "branch_team_groups": self.build_branch_team_groups(employee_profile),
                     "request_state_records": request_state_records,
+                    "attendance_event_today": employee_profile.attendance_events.filter(attendance_date=timezone.localdate()).first(),
+                    "self_service_quick_links": [
+                        {"label": "My Workspace", "url": reverse("employees:self_service_profile")},
+                        {"label": "My Leave", "url": reverse("employees:self_service_leave")},
+                        {"label": "My Documents", "url": reverse("employees:self_service_documents")},
+                        {"label": "My Attendance", "url": reverse("employees:self_service_attendance")},
+                        {"label": "Working Time", "url": reverse("employees:self_service_working_time")},
+                    ],
                 }
             )
             return context
@@ -515,6 +524,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                 "branch_compliance_dashboard": branch_compliance_dashboard,
                 "supervisor_setup_required": supervisor_setup_required,
                 "supervisor_scope_missing": supervisor_scope_missing,
+                "management_open_attendance_events": EmployeeAttendanceEvent.objects.filter(status=EmployeeAttendanceEvent.STATUS_OPEN).count(),
             }
         )
         return context

@@ -321,3 +321,27 @@
     border-color: var(--color-hover-border);
     box-shadow: 0 0 0 4px var(--color-focus-ring);
 }
+
+.dashboard-quick-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dashboard-quick-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface-gradient-3);
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.dashboard-quick-link:hover {
+    border-color: var(--color-hover-border);
+    background: var(--color-hover-surface);
+}

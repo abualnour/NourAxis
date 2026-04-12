@@ -4109,6 +4109,460 @@ input[type="date"]::-webkit-datetime-edit-year-field,
     margin-top: 0;
 }
 
+
+/* -------------------------------------------------------------
+   Self-service split pages + responsive polish
+-------------------------------------------------------------- */
+.employee-profile-page.self-service-hub-page {
+    display: grid;
+    gap: 16px;
+}
+
+.employee-profile-page .self-service-shell {
+    display: grid;
+    gap: 16px;
+}
+
+.employee-profile-page .self-service-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+.employee-profile-page .self-service-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.employee-profile-page.self-service-hub-page .card-header,
+.employee-profile-page.self-service-hub-page .card-body {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.employee-profile-page.self-service-hub-page .page-actions {
+    margin-top: 16px;
+}
+
+.employee-profile-page.self-service-hub-page .page-actions form {
+    margin: 0;
+}
+
+.employee-profile-page.self-service-hub-page .employee-sidebar-form .detail-grid {
+    gap: 14px;
+}
+
+.employee-profile-page.self-service-hub-page .detail-item,
+.employee-profile-page.self-service-hub-page .summary-list-item,
+.employee-profile-page.self-service-hub-page .document-card-item {
+    min-width: 0;
+}
+
+.profile-modal-shell {
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.profile-modal-dialog {
+    width: min(880px, calc(100vw - 24px));
+    margin: auto;
+    align-self: center;
+}
+
+.profile-modal-page {
+    max-height: calc(100vh - 24px);
+}
+
+.profile-modal-header,
+.profile-modal-footer {
+    position: relative;
+    z-index: 1;
+}
+
+.profile-modal-footer {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 1180px) {
+    .employee-profile-page .self-service-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .employee-profile-page .self-service-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .employee-profile-page .summary-list-item,
+    .employee-profile-page .document-card-item,
+    .employee-profile-page .detail-card,
+    .employee-profile-page .employee-hero-card {
+        border-radius: 18px;
+    }
+
+    .employee-profile-page .page-actions,
+    .employee-profile-page .document-actions-row,
+    .employee-profile-page .attendance-form-actions,
+    .employee-profile-page .profile-status-dropdown-actions {
+        align-items: stretch;
+    }
+
+    .employee-profile-page .page-actions .btn,
+    .employee-profile-page .document-actions-row .btn,
+    .employee-profile-page .attendance-form-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .employee-profile-page .document-actions-row form,
+    .employee-profile-page .page-actions form {
+        width: 100%;
+    }
+
+    .employee-profile-page .document-actions-row form .btn,
+    .employee-profile-page .page-actions form .btn {
+        width: 100%;
+    }
+
+    .profile-modal-shell {
+        padding: 10px;
+    }
+
+    .profile-modal-dialog {
+        width: min(100vw - 20px, 1120px);
+    }
+
+    .profile-modal-page {
+        max-height: calc(100vh - 20px);
+        border-radius: 22px;
+    }
+}
+
+@media (max-width: 640px) {
+    .employee-profile-page .self-service-summary-grid,
+    .employee-profile-page .detail-grid.two-col,
+    .employee-profile-page .detail-grid.three-col,
+    .employee-profile-page .employee-org-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .employee-profile-page.self-service-hub-page .card-header,
+    .employee-profile-page.self-service-hub-page .card-body,
+    .employee-profile-page .detail-card .card-header,
+    .employee-profile-page .detail-card .card-body,
+    .employee-profile-page .employee-hero-card .card-body {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+    }
+
+    .employee-profile-page .employee-hero-topline {
+        align-items: flex-start;
+    }
+
+    .employee-profile-page .employee-hero-name {
+        font-size: 1.7rem;
+    }
+}
+
+.self-service-profile-hero {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.self-service-profile-hero-copy {
+    min-width: 0;
+}
+
+.timeline-pagination-row {
+    justify-content: center;
+    gap: 8px;
+}
+
+.profile-modal-dialog {
+    width: min(840px, calc(100vw - 24px));
+}
+
+.profile-modal-page {
+    max-height: min(680px, calc(100vh - 24px));
+}
+
+.profile-modal-header,
+.profile-modal-footer {
+    padding: 14px 16px;
+}
+
+.profile-modal-body {
+    padding: 14px 16px;
+}
+
+.profile-modal-section-card {
+    padding: 12px;
+}
+
+.employee-profile-page .compact-detail-grid {
+    gap: 14px;
+}
+
+.employee-profile-page .profile-information-panel .card-header,
+.employee-profile-page .profile-information-panel .card-body {
+    background-clip: padding-box;
+}
+
+.employee-profile-page .profile-information-panel .detail-item,
+.employee-profile-page .profile-information-grid .detail-item,
+.employee-profile-page .attendance-address-grid .form-group {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-gradient-3);
+}
+
+.employee-profile-page .detail-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+}
+
+.employee-profile-page .detail-value {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.employee-profile-page .employee-hero-name {
+    font-size: clamp(1.3rem, 2.2vw, 2rem);
+}
+
+.employee-profile-page .employee-hero-role {
+    font-size: 0.95rem;
+}
+
+.employee-profile-page .employee-hero-topline,
+.employee-profile-page .workflow-state-stack,
+.employee-profile-page .page-actions {
+    gap: 8px;
+}
+
+.employee-profile-page .section-edit-button,
+.employee-profile-page .profile-status-dropdown summary,
+.employee-profile-page .profile-status-dropdown-actions .btn,
+.employee-profile-page .btn-sm {
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 9px;
+}
+
+.employee-profile-page .attendance-address-note {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-gradient-3);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.employee-profile-page .timeline-pagination-row .badge {
+    min-height: 30px;
+}
+
+.employee-profile-page .page-actions .btn,
+.employee-profile-page .document-actions-row .btn,
+.employee-profile-page .attendance-form-actions .btn,
+.employee-profile-page .document-file-row-actions .btn,
+.employee-profile-page .profile-status-dropdown-trigger,
+.employee-profile-page .profile-status-dropdown-actions .btn,
+.employee-profile-page .workflow-state-stack .btn,
+.employee-requests-page .page-actions .btn,
+.employee-requests-page .request-document-group-actions .btn,
+.attendance-management-page .page-actions .btn,
+.employee-directory-page .table-action-buttons .btn {
+    min-height: 34px !important;
+    padding: 7px 12px !important;
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    border-radius: 10px !important;
+}
+
+.employee-profile-page .workflow-state-stack,
+.employee-profile-page .status-badge-stack,
+.employee-requests-page .request-badge-row,
+.employee-requests-page .request-group-badges,
+.attendance-management-page .attendance-inline-badges {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.employee-profile-page .employee-hero-topline .badge,
+.employee-profile-page .workflow-state-stack .badge,
+.employee-profile-page .status-badge-stack .badge,
+.employee-requests-page .request-badge-row .badge,
+.employee-requests-page .request-group-badges .badge,
+.attendance-management-page .attendance-inline-badges .badge {
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 28px !important;
+    padding: 4px 10px !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    justify-content: center !important;
+    align-self: center !important;
+    flex: 0 0 auto !important;
+}
+
+.employee-profile-page .self-service-summary-grid,
+.employee-profile-page .profile-information-grid,
+.employee-profile-page .organization-detail-grid,
+.employee-profile-page .detail-grid.two-col.employee-org-grid,
+.employee-profile-page .detail-grid.two-col.employee-information-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    align-items: start !important;
+}
+
+.employee-profile-page .self-service-summary-grid .detail-item,
+.employee-profile-page .profile-information-grid .detail-item,
+.employee-profile-page .organization-detail-grid .detail-item,
+.employee-profile-page .detail-grid.two-col.employee-org-grid .detail-item,
+.employee-profile-page .detail-grid.two-col.employee-information-grid .detail-item {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 9px 11px !important;
+}
+
+.employee-profile-page .self-service-summary-grid .detail-label,
+.employee-profile-page .profile-information-grid .detail-label,
+.employee-profile-page .organization-detail-grid .detail-label {
+    margin-bottom: 4px !important;
+}
+
+.employee-profile-page .self-service-summary-grid .detail-value,
+.employee-profile-page .profile-information-grid .detail-value,
+.employee-profile-page .organization-detail-grid .detail-value {
+    font-size: 12.5px !important;
+    line-height: 1.35 !important;
+}
+
+.employee-profile-page .organization-detail-grid > .form-group-full,
+.employee-profile-page .profile-information-grid > .form-group-full,
+.employee-profile-page .self-service-summary-grid > .form-group-full {
+    grid-column: span 3 !important;
+}
+
+@media (max-width: 1180px) {
+    .employee-profile-page .self-service-summary-grid,
+    .employee-profile-page .profile-information-grid,
+    .employee-profile-page .organization-detail-grid,
+    .employee-profile-page .detail-grid.two-col.employee-org-grid,
+    .employee-profile-page .detail-grid.two-col.employee-information-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .employee-profile-page .organization-detail-grid > .form-group-full,
+    .employee-profile-page .profile-information-grid > .form-group-full,
+    .employee-profile-page .self-service-summary-grid > .form-group-full {
+        grid-column: span 2 !important;
+    }
+}
+
+.employee-profile-page .self-service-balance-grid {
+    align-items: stretch;
+}
+
+.employee-profile-page .self-service-balance-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.employee-profile-page .self-service-balance-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.employee-profile-page .compliance-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.employee-profile-page .compliance-compact-item {
+    padding: 12px 14px !important;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    height: 100%;
+}
+
+.employee-profile-page .compliance-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+.employee-profile-page .compliance-meta-grid .detail-item,
+.employee-profile-page .quick-status-grid .detail-item {
+    min-height: 0 !important;
+    padding: 8px 10px !important;
+}
+
+.employee-profile-page .quick-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.employee-profile-page .quick-status-grid .detail-item {
+    height: 100%;
+}
+
+.employee-profile-page .quick-status-grid .detail-value {
+    font-size: 1rem !important;
+}
+
+.employee-profile-page .self-service-balance-actions {
+    margin-top: auto;
+}
+
+@media (max-width: 1180px) {
+    .employee-profile-page .compliance-compact-grid,
+    .employee-profile-page .quick-status-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .employee-profile-page .compliance-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .self-service-profile-hero {
+        grid-template-columns: 1fr;
+        align-items: flex-start;
+    }
+
+    .profile-modal-dialog {
+        width: min(100vw - 12px, 920px);
+    }
+
+    .profile-modal-page {
+        max-height: calc(100vh - 12px);
+        border-radius: 18px;
+    }
+
+    .profile-modal-header,
+    .profile-modal-footer,
+    .profile-modal-body {
+        padding: 14px;
+    }
+}
+
 .employee-requests-page .request-review-form-grid {
     margin-top: 14px;
 }

@@ -73,10 +73,28 @@
             </div>
         </div>
 
-        <div class="detail-card-grid modern-list-gap">
-            <div class="card detail-card modern-soft-card employee-information-card">
+        <div class="card detail-card modern-soft-card">
+            <div class="card-header">
+                <div class="section-heading">
+                    <div>
+                        <h2>Quick Sections</h2>
+                        <p class="page-subtitle">Use dedicated pages for leave and document workflow, while keeping this profile focused on your information and full overview.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="page-actions">
+                    <a class="btn btn-light" href="{% url 'employees:employee_detail' employee.pk %}">Profile Overview</a>
+                    <a class="btn btn-primary" href="{% url 'employees:self_service_leave' %}">Leave Page</a>
+                    <a class="btn btn-secondary" href="{% url 'employees:self_service_documents' %}">Documents Page</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-card-grid modern-list-gap compact-detail-grid">
+            <div class="card detail-card modern-soft-card employee-information-card profile-information-panel">
                 <div class="card-header profile-section-card-header">
-                    <h2>Personal Information</h2>
+                    <h2>Profile Information</h2>
                     {% if can_use_profile_section_edit and profile_section_actions.employee_information %}
                         <button
                             type="button"
@@ -140,7 +158,7 @@
                 </div>
             </div>
 
-            <div class="card detail-card modern-soft-card">
+            <div class="card detail-card modern-soft-card profile-information-panel">
                 <div class="card-header profile-section-card-header">
                     <h2>Professional Information</h2>
                     {% if can_use_profile_section_edit and profile_section_actions.organization_information %}
@@ -1724,19 +1742,10 @@
                             <h2>Employee Timeline</h2>
                             {% if total_history_count %}
                                 <p class="timeline-summary-note">
-                                    Showing {{ visible_history_count }} of {{ total_history_count }} timeline entr{{ total_history_count|pluralize:"y,ies" }}.
+                                    Page {{ history_page_obj.number }} of {{ history_paginator.num_pages }}. Showing {{ visible_history_count }} of {{ total_history_count }} timeline entr{{ total_history_count|pluralize:"y,ies" }}.
                                 </p>
                             {% endif %}
                         </div>
-                        {% if total_history_count > 3 %}
-                            <div class="timeline-header-actions">
-                                {% if show_all_timeline %}
-                                    <a class="btn btn-secondary btn-sm timeline-toggle-button" href="{{ show_latest_timeline_url }}">Show Latest 3</a>
-                                {% else %}
-                                    <a class="btn btn-secondary btn-sm timeline-toggle-button" href="{{ show_all_timeline_url }}">Show All Timeline</a>
-                                {% endif %}
-                            </div>
-                        {% endif %}
                     </div>
                     <div class="card-body">
                         {% if history_entries %}
@@ -1758,6 +1767,20 @@
                             <div class="empty-state compact-empty-state">
                                 <h3>No timeline records found</h3>
                                 <p>Profile history, movement updates, and workflow notes will appear here.</p>
+                            </div>
+                        {% endif %}
+                        {% if history_paginator.num_pages > 1 %}
+                            <div class="page-actions timeline-pagination-row">
+                                {% if timeline_first_url %}
+                                    <a class="btn btn-light btn-sm" href="{{ timeline_first_url }}">First Page</a>
+                                {% endif %}
+                                {% if timeline_previous_url %}
+                                    <a class="btn btn-light btn-sm" href="{{ timeline_previous_url }}">Previous</a>
+                                {% endif %}
+                                <span class="badge badge-light">Page {{ history_page_obj.number }} / {{ history_paginator.num_pages }}</span>
+                                {% if timeline_next_url %}
+                                    <a class="btn btn-secondary btn-sm" href="{{ timeline_next_url }}">Next</a>
+                                {% endif %}
                             </div>
                         {% endif %}
                     </div>

@@ -1,14 +1,17 @@
-<nav class="sidebar">
+{% load static %}
+<nav class="sidebar sidebar-compact-nav">
     <div class="sidebar-brand-shell">
         <div class="sidebar-brand">
-            {% if nav_show_supervisor_workspace and nav_employee_profile %}
-                <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">HR System</a>
-            {% elif nav_show_operations_workspace and nav_employee_profile %}
-                <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">HR System</a>
-            {% elif nav_is_employee_self_service_only and nav_employee_profile %}
-                <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">HR System</a>
+            {% if nav_self_service_profile_url %}
+                <a href="{{ nav_self_service_profile_url }}" class="sidebar-brand-link">
+                    <img src="{% static 'brand/nouraxis-logo.png' %}" alt="NourAxis logo" class="sidebar-brand-logo">
+                    <span>NourAxis</span>
+                </a>
             {% else %}
-                <a href="{% url 'home' %}">HR System</a>
+                <a href="{% url 'home' %}" class="sidebar-brand-link">
+                    <img src="{% static 'brand/nouraxis-logo.png' %}" alt="NourAxis logo" class="sidebar-brand-logo">
+                    <span>NourAxis</span>
+                </a>
             {% endif %}
         </div>
     </div>
@@ -18,7 +21,19 @@
             {% if nav_show_supervisor_workspace and nav_employee_profile %}
                 <div class="sidebar-section">
                     <p class="sidebar-title">Supervisor Workspace</p>
-                    <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">Profile</a>
+                    <a href="{{ nav_self_service_profile_url|default:'#' }}">Profile</a>
+                    {% if nav_self_service_leave_url %}
+                        <a href="{{ nav_self_service_leave_url }}">My Leave</a>
+                    {% endif %}
+                    {% if nav_self_service_documents_url %}
+                        <a href="{{ nav_self_service_documents_url }}">My Documents</a>
+                    {% endif %}
+                    {% if nav_self_service_attendance_url %}
+                        <a href="{{ nav_self_service_attendance_url }}">My Attendance</a>
+                    {% endif %}
+                    {% if nav_self_service_working_time_url %}
+                        <a href="{{ nav_self_service_working_time_url }}">Working Time</a>
+                    {% endif %}
                     {% if nav_supervisor_branch_url %}
                         <a href="{{ nav_supervisor_branch_url }}">My Branch</a>
                     {% endif %}
@@ -33,7 +48,19 @@
             {% elif nav_show_operations_workspace and nav_employee_profile %}
                 <div class="sidebar-section">
                     <p class="sidebar-title">Operations Workspace</p>
-                    <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">My Operations Profile</a>
+                    <a href="{{ nav_self_service_profile_url|default:'#' }}">My Operations Profile</a>
+                    {% if nav_self_service_leave_url %}
+                        <a href="{{ nav_self_service_leave_url }}">My Leave</a>
+                    {% endif %}
+                    {% if nav_self_service_documents_url %}
+                        <a href="{{ nav_self_service_documents_url }}">My Documents</a>
+                    {% endif %}
+                    {% if nav_self_service_attendance_url %}
+                        <a href="{{ nav_self_service_attendance_url }}">My Attendance</a>
+                    {% endif %}
+                    {% if nav_self_service_working_time_url %}
+                        <a href="{{ nav_self_service_working_time_url }}">Working Time</a>
+                    {% endif %}
                     <a href="{% url 'employees:employee_list' %}">Employee Directory</a>
                     <a href="{% url 'employees:employee_admin_action_center' %}">Action Center</a>
                     {% if nav_can_view_requests %}
@@ -82,7 +109,7 @@
                             <a href="{% url 'employees:employee_admin_action_center' %}">Action Center</a>
                         {% endif %}
                         {% if nav_employee_profile %}
-                            <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">
+                            <a href="{{ nav_self_service_profile_url|default:'#' }}">
                                 {% if user.is_superuser %}
                                     My Admin Profile
                                 {% elif nav_is_branch_scoped_supervisor %}
@@ -95,6 +122,18 @@
                                     My Profile
                                 {% endif %}
                             </a>
+                            {% if nav_self_service_leave_url %}
+                                <a href="{{ nav_self_service_leave_url }}">My Leave</a>
+                            {% endif %}
+                            {% if nav_self_service_documents_url %}
+                                <a href="{{ nav_self_service_documents_url }}">My Documents</a>
+                            {% endif %}
+                            {% if nav_self_service_attendance_url %}
+                                <a href="{{ nav_self_service_attendance_url }}">My Attendance</a>
+                            {% endif %}
+                            {% if nav_self_service_working_time_url %}
+                                <a href="{{ nav_self_service_working_time_url }}">Working Time</a>
+                            {% endif %}
                         {% endif %}
                         {% if nav_can_view_attendance_management %}
                             <a href="{% url 'employees:attendance_management' %}">Attendance Management</a>
@@ -123,7 +162,19 @@
             {% if user.is_employee_role and nav_employee_profile and not nav_can_view_employee_directory %}
                 <div class="sidebar-section">
                     <p class="sidebar-title">My Workspace</p>
-                    <a href="{% url 'employees:employee_detail' nav_employee_profile.pk %}">My Profile</a>
+                    <a href="{{ nav_self_service_profile_url|default:'#' }}">My Profile</a>
+                    {% if nav_self_service_leave_url %}
+                        <a href="{{ nav_self_service_leave_url }}">Leave Requests</a>
+                    {% endif %}
+                    {% if nav_self_service_documents_url %}
+                        <a href="{{ nav_self_service_documents_url }}">Document Requests</a>
+                    {% endif %}
+                    {% if nav_self_service_attendance_url %}
+                        <a href="{{ nav_self_service_attendance_url }}">Attendance</a>
+                    {% endif %}
+                    {% if nav_self_service_working_time_url %}
+                        <a href="{{ nav_self_service_working_time_url }}">Working Time</a>
+                    {% endif %}
                 </div>
             {% endif %}
 
@@ -180,16 +231,6 @@
                     <a href="{% url 'login' %}" class="sidebar-auth-link">Login</a>
                 </div>
             {% endif %}
-        </div>
-
-        <div class="sidebar-section sidebar-theme-section">
-            <p class="sidebar-title">Theme Mode</p>
-            <div class="sidebar-theme-switcher" aria-label="Theme mode switcher">
-                <button type="button" class="theme-switcher-btn" data-theme-choice="premium-dark">Dark</button>
-                <button type="button" class="theme-switcher-btn" data-theme-choice="premium-light">Light</button>
-                <button type="button" class="theme-switcher-btn" data-theme-choice="dark-accent">Mint</button>
-                <button type="button" class="theme-switcher-btn" data-theme-choice="sunrise">Sunrise</button>
-            </div>
         </div>
     </div>
     </div>

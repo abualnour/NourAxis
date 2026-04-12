@@ -1316,6 +1316,84 @@ class EmployeeAttendanceCorrection(models.Model):
         return temp.attendance_rule_badge_class
 
 
+class EmployeeAttendanceEvent(models.Model):
+    STATUS_OPEN = "open"
+    STATUS_COMPLETED = "completed"
+
+    STATUS_CHOICES = [
+        (STATUS_OPEN, "Open"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="attendance_events",
+    )
+    attendance_date = models.DateField()
+    shift = models.CharField(
+        max_length=20,
+        choices=EmployeeAttendanceLedger.SHIFT_CHOICES,
+        default=EmployeeAttendanceLedger.SHIFT_MORNING,
+    )
+    check_in_at = models.DateTimeField(null=True, blank=True)
+    check_out_at = models.DateTimeField(null=True, blank=True)
+    check_in_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_in_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_out_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_out_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_in_location_label = models.CharField(max_length=255, blank=True, default="")
+    check_out_location_label = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    notes = models.TextField(blank=True)
+    synced_ledger = models.ForeignKey(
+        "EmployeeAttendanceLedger",
+        on_delete=models.SET_NULL,
+        related_name="self_service_events",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-attendance_date", "-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "attendance_date"],
+                name="unique_employee_attendance_event_date",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.attendance_date} punch record"
+
+    def clean(self):
+        errors = {}
+        if self.employee_id and self.attendance_date and self.employee.hire_date and self.attendance_date < self.employee.hire_date:
+            errors["attendance_date"] = "Attendance event date cannot be earlier than the employee hire date."
+        if self.check_in_at and self.check_out_at and self.check_out_at < self.check_in_at:
+            errors["check_out_at"] = "Check-out must be later than check-in."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def is_checked_in(self):
+        return bool(self.check_in_at)
+
+    @property
+    def is_checked_out(self):
+        return bool(self.check_out_at)
+
+    @property
+    def worked_hours_display(self):
+        if not self.check_in_at or not self.check_out_at or self.check_out_at <= self.check_in_at:
+            return "0.00"
+        total_seconds = Decimal((self.check_out_at - self.check_in_at).total_seconds())
+        hours = total_seconds / Decimal("3600")
+        return f"{hours.quantize(Decimal('0.01'))}"
+
+
 class EmployeeHistory(models.Model):
     EVENT_PROFILE = "profile"
     EVENT_TRANSFER = "transfer"

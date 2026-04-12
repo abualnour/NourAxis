@@ -27,6 +27,11 @@ def navbar_context(request):
             "nav_is_employee_self_service_only": False,
             "nav_supervisor_branch_url": "",
             "nav_can_view_branch_documents": False,
+            "nav_self_service_leave_url": "",
+            "nav_self_service_documents_url": "",
+            "nav_self_service_profile_url": "",
+            "nav_self_service_attendance_url": "",
+            "nav_self_service_working_time_url": "",
         }
 
     role_value = (getattr(user, "role", "") or "").strip().lower()
@@ -69,11 +74,14 @@ def navbar_context(request):
     )
 
     if show_supervisor_workspace:
-        primary_home_url = ("employees:employee_detail", {"pk": employee_profile.pk})
-        primary_home_label = "My Supervisor Profile"
+        primary_home_url = ("employees:self_service_profile", None)
+        primary_home_label = "My Supervisor Workspace"
     elif show_operations_workspace:
-        primary_home_url = ("employees:employee_detail", {"pk": employee_profile.pk})
-        primary_home_label = "My Operations Profile"
+        primary_home_url = ("employees:self_service_profile", None)
+        primary_home_label = "My Operations Workspace"
+    elif employee_profile and is_employee_role_user:
+        primary_home_url = ("employees:self_service_profile", None)
+        primary_home_label = "My Workspace"
     else:
         primary_home_url = ("home", None)
         primary_home_label = "System Home"
@@ -93,6 +101,18 @@ def navbar_context(request):
             "organization:branch_detail",
             kwargs={"pk": nav_scoped_branch.pk},
         )
+
+    nav_self_service_leave_url = ""
+    nav_self_service_documents_url = ""
+    nav_self_service_profile_url = ""
+    nav_self_service_attendance_url = ""
+    nav_self_service_working_time_url = ""
+    if employee_profile:
+        nav_self_service_profile_url = reverse("employees:self_service_profile")
+        nav_self_service_leave_url = reverse("employees:self_service_leave")
+        nav_self_service_documents_url = reverse("employees:self_service_documents")
+        nav_self_service_attendance_url = reverse("employees:self_service_attendance")
+        nav_self_service_working_time_url = reverse("employees:self_service_working_time")
 
     return {
         "nav_is_authenticated": True,
@@ -137,4 +157,9 @@ def navbar_context(request):
             or is_operations_manager_user
             or nav_scoped_branch is not None
         ),
+        "nav_self_service_profile_url": nav_self_service_profile_url,
+        "nav_self_service_leave_url": nav_self_service_leave_url,
+        "nav_self_service_documents_url": nav_self_service_documents_url,
+        "nav_self_service_attendance_url": nav_self_service_attendance_url,
+        "nav_self_service_working_time_url": nav_self_service_working_time_url,
     }

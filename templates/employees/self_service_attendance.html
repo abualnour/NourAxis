@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Attendance | {{ employee.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">Daily Attendance</h1>
+            <p class="page-subtitle">Register your daily check-in and check-out, with optional location verification, and keep it synced with the attendance system.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
+            <a class="btn btn-secondary" href="{{ self_service_working_time_url }}">Working Time</a>
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="self-service-card-grid">
+            <div class="card detail-card modern-soft-card">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>Today</h2>
+                            <p class="page-subtitle">{{ attendance_event_today.attendance_date|default:today|date:"F j, Y" }}</p>
+                        </div>
+                        {% if attendance_event_today and attendance_event_today.is_checked_out %}
+                            <span class="badge badge-success">Completed</span>
+                        {% elif attendance_event_today and attendance_event_today.is_checked_in %}
+                            <span class="badge badge-warning">Checked In</span>
+                        {% else %}
+                            <span class="badge badge-light">Not Started</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="detail-grid self-service-summary-grid" style="margin-bottom: 18px;">
+                        <div class="detail-item"><span class="detail-label">Shift</span><span class="detail-value">{{ attendance_event_today.get_shift_display|default:"Not selected" }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Check In</span><span class="detail-value">{% if attendance_event_today.check_in_at %}{{ attendance_event_today.check_in_at|date:"g:i A" }}{% else %}—{% endif %}</span></div>
+                        <div class="detail-item"><span class="detail-label">Check Out</span><span class="detail-value">{% if attendance_event_today.check_out_at %}{{ attendance_event_today.check_out_at|date:"g:i A" }}{% else %}—{% endif %}</span></div>
+                        <div class="detail-item"><span class="detail-label">Worked Hours</span><span class="detail-value">{{ attendance_event_today.worked_hours_display|default:"0.00" }}</span></div>
+                    </div>
+
+                    <form method="post" class="employee-sidebar-form self-service-attendance-form" id="self-service-attendance-form">
+                        {% csrf_token %}
+                        <div class="attendance-address-note">
+                            Browser location can capture coordinates, but the exact city, street, block, and building should be confirmed by the employee before saving.
+                        </div>
+                        <div class="detail-grid two-col attendance-address-grid">
+                            {% for field in attendance_self_service_form %}
+                                <div class="form-group {% if field.name == 'notes' or field.name == 'location_label' %}full-width{% endif %}">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% for error in field.errors %}
+                                        <div class="form-error">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="page-actions">
+                            <button class="btn btn-primary" type="submit" name="attendance_action" value="check_in" {% if attendance_event_today and attendance_event_today.check_in_at %}disabled{% endif %}>Check In</button>
+                            <button class="btn btn-secondary" type="submit" name="attendance_action" value="check_out" {% if not attendance_event_today or not attendance_event_today.check_in_at or attendance_event_today.check_out_at %}disabled{% endif %}>Check Out</button>
+                            <button class="btn btn-light" type="button" id="capture-location-btn">Use My Location</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card detail-card modern-soft-card">
+                <div class="card-header">
+                    <h2>Recent Attendance Records</h2>
+                </div>
+                <div class="card-body">
+                    {% if recent_attendance_events %}
+                        <div class="summary-list modern-list-gap">
+                            {% for event in recent_attendance_events %}
+                                <div class="summary-list-item">
+                                    <div class="status-badge-stack document-card-head">
+                                        <strong class="document-card-title">{{ event.attendance_date|date:"F j, Y" }}</strong>
+                                        <span class="badge {% if event.is_checked_out %}badge-success{% else %}badge-warning{% endif %}">{{ event.get_status_display }}</span>
+                                    </div>
+                                    <small>Check In: {% if event.check_in_at %}{{ event.check_in_at|date:"g:i A" }}{% else %}—{% endif %}</small>
+                                    <small>Check Out: {% if event.check_out_at %}{{ event.check_out_at|date:"g:i A" }}{% else %}—{% endif %}</small>
+                                    <small>Location: {{ event.check_in_location_label|default:"Not captured" }}</small>
+                                    {% if event.check_in_latitude and event.check_in_longitude %}
+                                        <small>Coordinates: {{ event.check_in_latitude }}, {{ event.check_in_longitude }}</small>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No attendance records yet</h3>
+                            <p>Your self-service daily attendance will appear here after the first check-in.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const captureButton = document.getElementById("capture-location-btn");
+    const latitudeField = document.getElementById("id_latitude");
+    const longitudeField = document.getElementById("id_longitude");
+    const labelField = document.getElementById("id_location_label");
+
+    if (!captureButton || !latitudeField || !longitudeField) {
+        return;
+    }
+
+    captureButton.addEventListener("click", function () {
+        if (!navigator.geolocation) {
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(function (position) {
+            latitudeField.value = position.coords.latitude.toFixed(6);
+            longitudeField.value = position.coords.longitude.toFixed(6);
+            if (labelField && !labelField.value) {
+                labelField.value = "Browser GPS capture";
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

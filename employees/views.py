@@ -14,6 +14,7 @@ from django.db.models import Case, IntegerField, Prefetch, Q, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -26,6 +27,7 @@ from .forms import (
     AttendanceManagementFilterForm,
     EmployeeActionRecordForm,
     EmployeeAttendanceCorrectionForm,
+    EmployeeSelfServiceAttendanceForm,
     EmployeeAttendanceLedgerForm,
     EmployeeDocumentForm,
     EmployeeForm,
@@ -43,12 +45,14 @@ from .models import (
     Employee,
     EmployeeActionRecord,
     EmployeeAttendanceCorrection,
+    EmployeeAttendanceEvent,
     EmployeeAttendanceLedger,
     EmployeeDocument,
     EmployeeHistory,
     EmployeeLeave,
     EmployeeRequiredSubmission,
     EmployeeDocumentRequest,
+    WORKING_HOURS_PER_DAY,
     WEEKLY_OFF_WEEKDAYS,
     build_employee_working_time_summary,
 )
@@ -95,6 +99,123 @@ def get_user_employee_profile(user):
         return None
     except AttributeError:
         return None
+
+
+def get_safe_next_url(request, fallback_url):
+    next_url = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return fallback_url
+
+
+def get_self_service_home_label(employee, user):
+    if is_operations_manager_user(user):
+        return "Operations Self-Service"
+    if is_branch_scoped_supervisor(user):
+        return "Supervisor Self-Service"
+    return "Employee Self-Service"
+
+
+def build_self_service_page_context(request, employee, *, current_section):
+    detail_view = EmployeeDetailView()
+    detail_view.request = request
+    detail_view.object = employee
+    context = detail_view.get_context_data(object=employee)
+    context["self_service_home_label"] = get_self_service_home_label(employee, request.user)
+    context["self_service_current_section"] = current_section
+    context["self_service_profile_url"] = reverse("employees:self_service_profile")
+    context["self_service_leave_url"] = reverse("employees:self_service_leave")
+    context["self_service_documents_url"] = reverse("employees:self_service_documents")
+    context["self_service_attendance_url"] = reverse("employees:self_service_attendance")
+    context["self_service_working_time_url"] = reverse("employees:self_service_working_time")
+    return context
+
+
+def get_shift_time_defaults(shift_value):
+    shift_map = EmployeeAttendanceLedger.get_shift_time_map()
+    shift_config = shift_map.get(shift_value or EmployeeAttendanceLedger.SHIFT_MORNING)
+    return shift_config or shift_map[EmployeeAttendanceLedger.SHIFT_MORNING]
+
+
+def build_attendance_location_label(cleaned_data):
+    if not cleaned_data:
+        return ""
+
+    primary_label = (cleaned_data.get("location_label") or "").strip()
+    address_bits = []
+
+    city = (cleaned_data.get("city") or "").strip()
+    street = (cleaned_data.get("street") or "").strip()
+    block = (cleaned_data.get("block") or "").strip()
+    building_number = (cleaned_data.get("building_number") or "").strip()
+
+    if city:
+        address_bits.append(city)
+    if street:
+        address_bits.append(f"Street {street}")
+    if block:
+        address_bits.append(f"Block {block}")
+    if building_number:
+        address_bits.append(f"Building {building_number}")
+
+    if primary_label and address_bits:
+        return f"{primary_label} - {', '.join(address_bits)}"
+    if address_bits:
+        return ", ".join(address_bits)
+    return primary_label
+
+
+def sync_attendance_event_to_ledger(event, actor_label="System"):
+    if not event or not event.employee_id or not event.check_in_at or not event.check_out_at:
+        return None
+
+    clock_in_time = timezone.localtime(event.check_in_at).time().replace(microsecond=0)
+    clock_out_time = timezone.localtime(event.check_out_at).time().replace(microsecond=0)
+
+    ledger, _created = EmployeeAttendanceLedger.objects.get_or_create(
+        employee=event.employee,
+        attendance_date=event.attendance_date,
+        defaults={
+            "day_status": EmployeeAttendanceLedger.DAY_STATUS_PRESENT,
+            "shift": event.shift or EmployeeAttendanceLedger.SHIFT_MORNING,
+            "clock_in_time": clock_in_time,
+            "clock_out_time": clock_out_time,
+            "scheduled_hours": WORKING_HOURS_PER_DAY,
+            "source": EmployeeAttendanceLedger.SOURCE_SYSTEM,
+            "notes": "",
+            "created_by": actor_label,
+            "updated_by": actor_label,
+        },
+    )
+
+    ledger.day_status = EmployeeAttendanceLedger.DAY_STATUS_PRESENT
+    ledger.shift = event.shift or EmployeeAttendanceLedger.SHIFT_MORNING
+    ledger.clock_in_time = clock_in_time
+    ledger.clock_out_time = clock_out_time
+    ledger.scheduled_hours = WORKING_HOURS_PER_DAY
+    ledger.source = EmployeeAttendanceLedger.SOURCE_SYSTEM
+    location_bits = []
+    if event.check_in_location_label:
+        location_bits.append(f"Check-in: {event.check_in_location_label}")
+    if event.check_out_location_label:
+        location_bits.append(f"Check-out: {event.check_out_location_label}")
+    event_note = "Self-service attendance"
+    if location_bits:
+        event_note = f"{event_note}. {' | '.join(location_bits)}"
+    ledger.notes = event_note
+    ledger.updated_by = actor_label
+    if not ledger.created_by:
+        ledger.created_by = actor_label
+    ledger.save()
+
+    event.synced_ledger = ledger
+    event.status = EmployeeAttendanceEvent.STATUS_COMPLETED
+    event.save(update_fields=["synced_ledger", "status", "updated_at"])
+    return ledger
 
 
 def is_admin_compatible(user):
@@ -1646,22 +1767,33 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
 
         history_queryset = employee.history_entries.all()
         total_history_count = history_queryset.count()
-        show_all_timeline = self.request.GET.get("show_all_timeline") == "1"
-        history_entries = list(history_queryset if show_all_timeline else history_queryset[:3])
+        history_paginator = Paginator(history_queryset, 5)
+        history_page_obj = history_paginator.get_page(self.request.GET.get("timeline_page"))
+        history_entries = list(history_page_obj.object_list)
         visible_history_count = len(history_entries)
-        has_more_history = total_history_count > visible_history_count
-        history_toggle_query = self.request.GET.copy()
-        history_toggle_query.pop("page", None)
-        history_toggle_query["show_all_timeline"] = "1"
-        show_all_timeline_url = f"{self.request.path}?{history_toggle_query.urlencode()}#employee-timeline-section"
-        history_latest_query = self.request.GET.copy()
-        history_latest_query.pop("page", None)
-        history_latest_query.pop("show_all_timeline", None)
-        history_latest_querystring = history_latest_query.urlencode()
-        show_latest_timeline_url = self.request.path
-        if history_latest_querystring:
-            show_latest_timeline_url = f"{show_latest_timeline_url}?{history_latest_querystring}"
-        show_latest_timeline_url = f"{show_latest_timeline_url}#employee-timeline-section"
+        has_more_history = history_paginator.num_pages > 1
+        timeline_query = self.request.GET.copy()
+        timeline_query.pop("timeline_page", None)
+        timeline_base_query = timeline_query.urlencode()
+        timeline_base_path = self.request.path
+        if timeline_base_query:
+            timeline_base_path = f"{timeline_base_path}?{timeline_base_query}"
+        timeline_base_url = f"{timeline_base_path}#employee-timeline-section"
+        timeline_first_url = ""
+        timeline_previous_url = ""
+        timeline_next_url = ""
+        if history_page_obj.number > 1:
+            first_query = self.request.GET.copy()
+            first_query["timeline_page"] = 1
+            timeline_first_url = f"{self.request.path}?{first_query.urlencode()}#employee-timeline-section"
+        if history_page_obj.has_previous():
+            previous_query = self.request.GET.copy()
+            previous_query["timeline_page"] = history_page_obj.previous_page_number()
+            timeline_previous_url = f"{self.request.path}?{previous_query.urlencode()}#employee-timeline-section"
+        if history_page_obj.has_next():
+            next_query = self.request.GET.copy()
+            next_query["timeline_page"] = history_page_obj.next_page_number()
+            timeline_next_url = f"{self.request.path}?{next_query.urlencode()}#employee-timeline-section"
         history_form = kwargs.get("history_form") or EmployeeHistoryForm()
 
         working_time_summary = build_employee_working_time_summary(employee)
@@ -1727,12 +1859,15 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
 
         context["history_form"] = history_form
         context["history_entries"] = history_entries
-        context["show_all_timeline"] = show_all_timeline
         context["total_history_count"] = total_history_count
         context["visible_history_count"] = visible_history_count
         context["has_more_history"] = has_more_history
-        context["show_all_timeline_url"] = show_all_timeline_url
-        context["show_latest_timeline_url"] = show_latest_timeline_url
+        context["history_page_obj"] = history_page_obj
+        context["history_paginator"] = history_paginator
+        context["timeline_base_url"] = timeline_base_url
+        context["timeline_first_url"] = timeline_first_url
+        context["timeline_previous_url"] = timeline_previous_url
+        context["timeline_next_url"] = timeline_next_url
 
         context["working_time_summary"] = working_time_summary
         context["can_view_working_time_summary"] = can_view_working_time_summary
@@ -1848,6 +1983,181 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
         context["can_cancel_employee_document_request"] = True
 
         return context
+
+
+@login_required
+def self_service_profile_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="profile",
+    )
+    return render(request, "employees/self_service_profile.html", context)
+
+
+@login_required
+def self_service_leave_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="leave",
+    )
+    return render(request, "employees/self_service_leave.html", context)
+
+
+@login_required
+def self_service_documents_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="documents",
+    )
+    return render(request, "employees/self_service_documents.html", context)
+
+
+@login_required
+def self_service_working_time_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="working_time",
+    )
+    return render(request, "employees/self_service_working_time.html", context)
+
+
+@login_required
+def self_service_attendance_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+
+    today = timezone.localdate()
+    attendance_event = (
+        employee.attendance_events.filter(attendance_date=today).select_related("synced_ledger").first()
+    )
+
+    if request.method == "POST":
+        action = (request.POST.get("attendance_action") or "").strip()
+        form = EmployeeSelfServiceAttendanceForm(request.POST)
+        if form.is_valid():
+            actor_label = get_actor_label(request.user) or employee.full_name
+            location_label = build_attendance_location_label(form.cleaned_data)
+            now = timezone.localtime()
+            attendance_event, _created = EmployeeAttendanceEvent.objects.get_or_create(
+                employee=employee,
+                attendance_date=today,
+                defaults={
+                    "shift": form.cleaned_data["shift"],
+                },
+            )
+            attendance_event.shift = attendance_event.shift or form.cleaned_data["shift"]
+            if action == "check_in":
+                if attendance_event.check_in_at:
+                    messages.warning(request, "Check-in is already registered for today.")
+                else:
+                    attendance_event.shift = form.cleaned_data["shift"]
+                    attendance_event.check_in_at = now
+                    attendance_event.check_in_latitude = form.cleaned_data.get("latitude")
+                    attendance_event.check_in_longitude = form.cleaned_data.get("longitude")
+                    attendance_event.check_in_location_label = location_label
+                    attendance_event.notes = form.cleaned_data.get("notes") or ""
+                    attendance_event.status = EmployeeAttendanceEvent.STATUS_OPEN
+                    attendance_event.save()
+                    messages.success(request, "Check-in registered successfully.")
+            elif action == "check_out":
+                if not attendance_event.check_in_at:
+                    messages.error(request, "Please check in first before checking out.")
+                elif attendance_event.check_out_at:
+                    messages.warning(request, "Check-out is already registered for today.")
+                else:
+                    attendance_event.check_out_at = now
+                    attendance_event.check_out_latitude = form.cleaned_data.get("latitude")
+                    attendance_event.check_out_longitude = form.cleaned_data.get("longitude")
+                    attendance_event.check_out_location_label = location_label
+                    if form.cleaned_data.get("notes"):
+                        attendance_event.notes = form.cleaned_data["notes"]
+                    attendance_event.status = EmployeeAttendanceEvent.STATUS_COMPLETED
+                    attendance_event.save()
+                    synced_ledger = sync_attendance_event_to_ledger(attendance_event, actor_label=actor_label)
+                    if synced_ledger:
+                        create_employee_history(
+                            employee=employee,
+                            title="Self-service attendance completed",
+                            description=(
+                                f"Check-in: {timezone.localtime(attendance_event.check_in_at):%I:%M %p}. "
+                                f"Check-out: {timezone.localtime(attendance_event.check_out_at):%I:%M %p}. "
+                                f"Shift: {synced_ledger.get_shift_display()}."
+                            ),
+                            event_type=EmployeeHistory.EVENT_STATUS,
+                            created_by=actor_label,
+                            is_system_generated=True,
+                            event_date=today,
+                        )
+                    messages.success(request, "Check-out registered and synced to attendance management.")
+            return redirect("employees:self_service_attendance")
+        messages.error(request, "Please review the attendance details and try again.")
+    else:
+        initial = {}
+        if attendance_event and attendance_event.shift:
+            initial["shift"] = attendance_event.shift
+        form = EmployeeSelfServiceAttendanceForm(initial=initial)
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="attendance",
+    )
+    context["attendance_event_today"] = attendance_event
+    context["attendance_self_service_form"] = form
+    context["recent_attendance_events"] = list(employee.attendance_events.select_related("synced_ledger")[:7])
+    context["today"] = today
+    return render(request, "employees/self_service_attendance.html", context)
 
 
 class EmployeeCreateView(LoginRequiredMixin, CreateView):
@@ -2297,7 +2607,12 @@ def employee_required_submission_create(request, pk):
                 first_error = first_field_errors[0]
         messages.error(request, first_error)
 
-    return redirect('employees:employee_detail', pk=employee.pk)
+    return redirect(
+        get_safe_next_url(
+            request,
+            reverse("employees:employee_detail", kwargs={"pk": employee.pk}),
+        )
+    )
 
 
 @login_required
@@ -2383,7 +2698,12 @@ def employee_required_submission_submit(request, request_pk):
                 first_error = first_field_errors[0]
         messages.error(request, first_error)
 
-    return redirect('employees:employee_detail', pk=employee.pk)
+    return redirect(
+        get_safe_next_url(
+            request,
+            reverse("employees:employee_detail", kwargs={"pk": employee.pk}),
+        )
+    )
 
 
 @login_required
@@ -2476,7 +2796,12 @@ def employee_document_request_create(request, pk):
                 first_error = first_field_errors[0]
         messages.error(request, first_error)
 
-    return redirect("employees:employee_detail", pk=employee.pk)
+    return redirect(
+        get_safe_next_url(
+            request,
+            reverse("employees:employee_detail", kwargs={"pk": employee.pk}),
+        )
+    )
 
 
 @login_required
@@ -2598,7 +2923,12 @@ def employee_document_request_cancel(request, request_pk):
     )
 
     messages.success(request, "Document request cancelled successfully.")
-    return redirect("employees:employee_detail", pk=employee.pk)
+    return redirect(
+        get_safe_next_url(
+            request,
+            reverse("employees:employee_detail", kwargs={"pk": employee.pk}),
+        )
+    )
 
 
 @login_required

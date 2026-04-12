@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}My Workspace | {{ employee.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">{{ self_service_home_label }}</h1>
+            <p class="page-subtitle">A compact profile page with your personal, professional, compliance, and request information organized for mobile and daily use.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-secondary" href="{{ self_service_attendance_url }}">Attendance</a>
+            <a class="btn btn-primary" href="{{ self_service_leave_url }}">Leave</a>
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="card detail-card modern-soft-card profile-information-panel">
+            <div class="card-header">
+                <div class="section-heading">
+                    <div>
+                        <h2>Profile Information</h2>
+                        <p class="page-subtitle">Personal information and professional placement are combined here in one section.</p>
+                    </div>
+                    <span class="badge badge-light">{{ employee.employee_id|default:"No ID" }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="self-service-profile-hero">
+                    <div class="self-service-profile-hero-media">
+                        {% if employee.photo %}
+                            <img alt="{{ employee.full_name }}" class="employee-photo" src="{{ employee.photo.url }}">
+                        {% else %}
+                            <div class="employee-avatar employee-avatar-lg">{{ employee.full_name|slice:":1"|upper }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="self-service-profile-hero-copy">
+                        <h2 class="employee-hero-name">{{ employee.full_name }}</h2>
+                        <p class="employee-hero-role">{{ employee_display_job_title|default:"No job title assigned" }}</p>
+                        <div class="workflow-state-stack">
+                            <span class="badge {% if employee.is_active %}badge-success{% else %}badge-danger{% endif %}">{{ employee.get_employment_status_display|default:"Active" }}</span>
+                            <span class="badge badge-light">{{ employee_display_branch|default:"No branch" }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-grid self-service-summary-grid profile-information-grid">
+                    <div class="detail-item"><span class="detail-label">Email</span><span class="detail-value">{% if employee.email %}<a href="mailto:{{ employee.email }}">{{ employee.email }}</a>{% else %}—{% endif %}</span></div>
+                    <div class="detail-item"><span class="detail-label">Phone</span><span class="detail-value">{% if employee.phone %}<a href="tel:{{ employee.phone }}">{{ employee.phone }}</a>{% else %}—{% endif %}</span></div>
+                    <div class="detail-item"><span class="detail-label">Birth Date</span><span class="detail-value">{% if employee.birth_date %}{{ employee.birth_date|date:"F j, Y" }}{% else %}—{% endif %}</span></div>
+                    <div class="detail-item"><span class="detail-label">Nationality</span><span class="detail-value">{{ employee.nationality|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Company</span><span class="detail-value">{{ employee_display_company|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Department</span><span class="detail-value">{{ employee_display_department|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Section</span><span class="detail-value">{{ employee_display_section|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Branch</span><span class="detail-value">{{ employee_display_branch|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Supervisor</span><span class="detail-value">{{ self_service_supervisor.full_name|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Team Leader</span><span class="detail-value">{{ self_service_team_leader.full_name|default:"—" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Hire Date</span><span class="detail-value">{% if employee.hire_date %}{{ employee.hire_date|date:"F j, Y" }}{% else %}—{% endif %}</span></div>
+                    <div class="detail-item"><span class="detail-label">Marital Status</span><span class="detail-value">{{ employee.get_marital_status_display|default:"—" }}</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="self-service-card-grid self-service-balance-grid">
+            <div class="card detail-card modern-soft-card self-service-balance-card">
+                <div class="card-header">
+                    <h2>ID Compliance</h2>
+                </div>
+                <div class="card-body self-service-balance-body">
+                    {% if identity_document_statuses %}
+                        <div class="summary-list modern-list-gap compliance-compact-grid">
+                            {% for identity_document in identity_document_statuses %}
+                                <div class="summary-list-item compliance-compact-item">
+                                    <div class="status-badge-stack document-card-head">
+                                        <strong class="document-card-title">{{ identity_document.label }}</strong>
+                                        <span class="badge {{ identity_document.badge_class }}">{{ identity_document.status_label }}</span>
+                                    </div>
+                                    <div class="detail-grid three-col compliance-meta-grid">
+                                        <div class="detail-item">
+                                            <span class="detail-label">Reference</span>
+                                            <span class="detail-value">{{ identity_document.reference_number|default:"—" }}</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Expiry</span>
+                                            <span class="detail-value">{% if identity_document.expiry_date %}{{ identity_document.expiry_date|date:"F j, Y" }}{% else %}—{% endif %}</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Days Left</span>
+                                            <span class="detail-value">{{ identity_document.days_remaining_display }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No ID records yet</h3>
+                            <p>Passport and Civil ID details will appear here.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card detail-card modern-soft-card self-service-balance-card">
+                <div class="card-header">
+                    <h2>Quick Status</h2>
+                </div>
+                <div class="card-body self-service-balance-body">
+                    <div class="detail-grid self-service-summary-grid quick-status-grid">
+                        <div class="detail-item"><span class="detail-label">Pending Leave</span><span class="detail-value">{{ self_service_pending_leave_count }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Approved Leave</span><span class="detail-value">{{ self_service_approved_leave_count }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Document Requests</span><span class="detail-value">{{ employee_document_request_total }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Management Requests</span><span class="detail-value">{{ required_submission_total }}</span></div>
+                    </div>
+                    <div class="page-actions self-service-balance-actions">
+                        <a class="btn btn-light" href="{{ self_service_documents_url }}">Open Documents</a>
+                        <a class="btn btn-light" href="{{ self_service_working_time_url }}">Working Time Summary</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

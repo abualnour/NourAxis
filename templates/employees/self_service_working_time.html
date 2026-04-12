@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Working Time Summary | {{ employee.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">Working Time Summary</h1>
+            <p class="page-subtitle">Your service duration, leave balance, and working totals in a dedicated page.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
+            <a class="btn btn-secondary" href="{{ self_service_attendance_url }}">Attendance</a>
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="card detail-card modern-soft-card">
+            <div class="card-header">
+                <h2>Leave Balance Summary</h2>
+            </div>
+            <div class="card-body">
+                <div class="modern-metric-grid working-time-metrics working-time-metrics--balance">
+                    <div class="metric-card"><span class="metric-label">Service Duration</span><span class="metric-value">{{ working_time_summary.service_duration_display }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Service Days</span><span class="metric-value">{{ working_time_summary.service_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Annual Leave Entitlement</span><span class="metric-value">{{ working_time_summary.annual_leave_entitlement_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Annual Leave Taken</span><span class="metric-value">{{ working_time_summary.annual_leave_taken_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Future Approved Leave</span><span class="metric-value">{{ working_time_summary.approved_future_annual_leave_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Available After Planning</span><span class="metric-value">{{ working_time_summary.annual_leave_available_after_planning_days }}</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card detail-card modern-soft-card">
+            <div class="card-header">
+                <h2>Core Working Totals</h2>
+            </div>
+            <div class="card-body">
+                <div class="modern-metric-grid working-time-metrics working-time-metrics--balance">
+                    <div class="metric-card"><span class="metric-label">Scheduled Working Days</span><span class="metric-value">{{ working_time_summary.scheduled_working_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Absence Days</span><span class="metric-value">{{ working_time_summary.absence_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Punctuality Deduction Hours</span><span class="metric-value">{{ working_time_summary.punctuality_deduction_hours }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Total Working Days</span><span class="metric-value">{{ working_time_summary.total_working_days }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Total Working Hours</span><span class="metric-value">{{ working_time_summary.total_working_hours }}</span></div>
+                    <div class="metric-card"><span class="metric-label">Approved Leave Days</span><span class="metric-value">{{ working_time_summary.approved_leave_days }}</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

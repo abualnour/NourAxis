@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -10,6 +11,7 @@ from .models import (
     Employee,
     EmployeeActionRecord,
     EmployeeAttendanceCorrection,
+    EmployeeAttendanceEvent,
     EmployeeAttendanceLedger,
     EmployeeDocument,
     EmployeeHistory,
@@ -31,9 +33,6 @@ def infer_employee_account_role(job_title):
 
     if (
         re.search(r"(?i)\bsupervisor\b", title_name)
-        or re.search(r"(?i)\bteam\s*leader\b", title_name)
-        or re.search(r"(?i)\bleader\b", title_name)
-        or re.search(r"(?i)\blead\b", title_name)
     ):
         return "supervisor"
 
@@ -986,6 +985,55 @@ class EmployeeAttendanceCorrectionForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+
+class EmployeeSelfServiceAttendanceForm(forms.Form):
+    shift = forms.ChoiceField(
+        choices=EmployeeAttendanceLedger.SHIFT_CHOICES,
+        label="Shift",
+    )
+    location_label = forms.CharField(required=False, max_length=255, label="Location Label")
+    city = forms.CharField(required=False, max_length=120, label="City")
+    street = forms.CharField(required=False, max_length=120, label="Street")
+    block = forms.CharField(required=False, max_length=120, label="Block")
+    building_number = forms.CharField(required=False, max_length=120, label="Building Number")
+    latitude = forms.DecimalField(required=False, max_digits=9, decimal_places=6, label="Latitude")
+    longitude = forms.DecimalField(required=False, max_digits=9, decimal_places=6, label="Longitude")
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Optional duty note for today."}),
+        label="Notes",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            widget = field.widget
+            existing = widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{existing} form-control".strip()
+        self.fields["location_label"].widget.attrs["placeholder"] = "Work site, office, or landmark"
+        self.fields["city"].widget.attrs["placeholder"] = "Example: Kuwait City"
+        self.fields["street"].widget.attrs["placeholder"] = "Street name"
+        self.fields["block"].widget.attrs["placeholder"] = "Block"
+        self.fields["building_number"].widget.attrs["placeholder"] = "Building / office number"
+
+    def clean_notes(self):
+        return (self.cleaned_data.get("notes") or "").strip()
+
+    def clean_location_label(self):
+        return (self.cleaned_data.get("location_label") or "").strip()
+
+    def clean_city(self):
+        return (self.cleaned_data.get("city") or "").strip()
+
+    def clean_street(self):
+        return (self.cleaned_data.get("street") or "").strip()
+
+    def clean_block(self):
+        return (self.cleaned_data.get("block") or "").strip()
+
+    def clean_building_number(self):
+        return (self.cleaned_data.get("building_number") or "").strip()
 
 
 class EmployeeHistoryForm(forms.ModelForm):

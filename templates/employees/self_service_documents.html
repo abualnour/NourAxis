@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}My Documents | {{ employee.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">{{ self_service_home_label }} Documents</h1>
+            <p class="page-subtitle">Request certificates from management, answer file requests from management, and review completed responses in one place.</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ self_service_profile_url }}" class="btn btn-light">Profile</a>
+            <a href="{{ self_service_leave_url }}" class="btn btn-secondary">Leave</a>
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="card detail-card modern-soft-card">
+            <div class="card-header">
+                <div class="section-heading">
+                    <div>
+                        <h2>Your Information</h2>
+                        <p class="page-subtitle">Quick employee placement details for document workflow routing.</p>
+                    </div>
+                    <span class="badge badge-light">{{ employee_display_branch|default:"No branch" }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="detail-grid self-service-summary-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Employee</span>
+                        <span class="detail-value">{{ employee.full_name|default:"—" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Job Title</span>
+                        <span class="detail-value">{{ employee_display_job_title|default:"—" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Branch</span>
+                        <span class="detail-value">{{ employee_display_branch|default:"—" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Department</span>
+                        <span class="detail-value">{{ employee_display_department|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="self-service-card-grid">
+            <div class="card detail-card modern-soft-card">
+                <div class="card-header">
+                    <div>
+                        <h2>Request Document / Certificate</h2>
+                        <p class="page-subtitle">Request a salary certificate, HR letter, experience certificate, or another management-issued file.</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form action="{% url 'employees:employee_document_request_create' employee.pk %}" class="employee-sidebar-form" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="detail-grid two-col">
+                            {% for field in employee_document_request_create_form %}
+                                <div class="form-group {% if field.name == 'request_note' %}full-width{% endif %}">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.help_text %}
+                                        <small class="muted-text">{{ field.help_text }}</small>
+                                    {% endif %}
+                                    {% for error in field.errors %}
+                                        <div class="form-error">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="page-actions">
+                            <button class="btn btn-primary" type="submit">Send Document Request</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card detail-card modern-soft-card">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>Requests From Management</h2>
+                            <p class="page-subtitle">Upload the requested file when management asks for a compliance or document response.</p>
+                        </div>
+                        <span class="badge badge-primary">{{ required_submission_total }} Request{{ required_submission_total|pluralize }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="detail-grid self-service-summary-grid" style="margin-bottom: 18px;">
+                        <div class="detail-item"><span class="detail-label">Requested</span><span class="detail-value">{{ required_submission_requested_count }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Submitted</span><span class="detail-value">{{ required_submission_submitted_count }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Completed</span><span class="detail-value">{{ required_submission_completed_count }}</span></div>
+                        <div class="detail-item"><span class="detail-label">Needs Correction</span><span class="detail-value">{{ required_submission_needs_correction_count }}</span></div>
+                    </div>
+
+                    {% if required_submission_requests %}
+                        <div class="summary-list document-list modern-list-gap">
+                            {% for submission_request in required_submission_requests %}
+                                <div class="summary-list-item document-card-item {% if submission_request.status == 'completed' %}document-card-item-success{% elif submission_request.status == 'needs_correction' or submission_request.is_overdue %}document-card-item-danger{% elif submission_request.status == 'submitted' %}document-card-item-warning{% endif %}">
+                                    <div class="table-stack document-card-stack">
+                                        <div class="status-badge-stack document-card-head">
+                                            <strong class="document-card-title">{{ submission_request.title }}</strong>
+                                            <span class="badge {{ submission_request.status_badge_class }}">{{ submission_request.get_status_display }}</span>
+                                        </div>
+                                        <div class="workflow-state-stack">
+                                            <span class="badge {{ submission_request.priority_badge_class }}">{{ submission_request.get_priority_display }}</span>
+                                            <span class="badge badge-light">{{ submission_request.get_request_type_display }}</span>
+                                            {% if submission_request.is_overdue %}<span class="badge badge-danger">Overdue</span>{% endif %}
+                                        </div>
+                                        <small>Requested {{ submission_request.created_at|date:"F j, Y - g:i A"|default:"—" }}{% if submission_request.needed_by_date %} • Needed by {{ submission_request.needed_by_date|date:"F j, Y" }}{% endif %}</small>
+                                        {% if submission_request.instructions %}<div class="document-description"><strong>Instructions:</strong> {{ submission_request.instructions|linebreaksbr }}</div>{% endif %}
+                                        {% if submission_request.review_note %}<div class="document-description"><strong>Review Note:</strong> {{ submission_request.review_note|linebreaksbr }}</div>{% endif %}
+                                        {% if submission_request.can_employee_submit and submission_request.response_form %}
+                                            <form action="{% url 'employees:employee_required_submission_submit' submission_request.pk %}" method="post" enctype="multipart/form-data" class="employee-sidebar-form">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <div class="detail-grid two-col">
+                                                    {% for field in submission_request.response_form %}
+                                                        <div class="form-group {% if field.name == 'employee_note' or field.name == 'response_file' %}full-width{% endif %}">
+                                                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                                            {{ field }}
+                                                            {% for error in field.errors %}
+                                                                <div class="form-error">{{ error }}</div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="page-actions">
+                                                    <button class="btn btn-primary" type="submit">Submit Requested File</button>
+                                                </div>
+                                            </form>
+                                        {% elif submission_request.response_file %}
+                                            <div class="page-actions document-actions-row">
+                                                <a class="btn btn-light btn-sm" href="{% url 'employees:employee_required_submission_response_view' submission_request.pk %}" target="_blank" rel="noopener">View Submitted File</a>
+                                                <a class="btn btn-secondary btn-sm" href="{% url 'employees:employee_required_submission_response_download' submission_request.pk %}">Download File</a>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No management requests right now</h3>
+                            <p>Any file or compliance request from management will appear here.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card detail-card modern-soft-card self-service-document-request-status-card">
+            <div class="card-header">
+                <div class="section-heading">
+                    <div>
+                        <h2>My Document Request Status</h2>
+                        <p class="page-subtitle">Track the reply status for your salary certificate and other document requests.</p>
+                    </div>
+                    <span class="badge badge-primary">{{ employee_document_request_total }} Request{{ employee_document_request_total|pluralize }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="detail-grid self-service-summary-grid" style="margin-bottom: 18px;">
+                    <div class="detail-item"><span class="detail-label">Requested</span><span class="detail-value">{{ self_service_document_request_requested_count }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Approved / In Progress</span><span class="detail-value">{{ self_service_document_request_approved_count }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Completed</span><span class="detail-value">{{ self_service_document_request_completed_count }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Rejected</span><span class="detail-value">{{ self_service_document_request_rejected_count }}</span></div>
+                </div>
+
+                {% if self_service_document_request_records %}
+                    <div class="summary-list document-list modern-list-gap">
+                        {% for document_request in self_service_document_request_records %}
+                            <div class="summary-list-item document-card-item {% if document_request.status == 'completed' %}document-card-item-success{% elif document_request.status == 'rejected' or document_request.status == 'cancelled' %}document-card-item-danger{% else %}document-card-item-warning{% endif %}">
+                                <div class="table-stack document-card-stack">
+                                    <div class="status-badge-stack document-card-head">
+                                        <strong class="document-card-title">{{ document_request.title }}</strong>
+                                        <span class="badge {{ document_request.status_badge_class }}">{{ document_request.get_status_display }}</span>
+                                    </div>
+                                    <div class="workflow-state-stack">
+                                        <span class="badge {{ document_request.priority_badge_class }}">{{ document_request.get_priority_display }}</span>
+                                        <span class="badge badge-light">{{ document_request.get_request_type_display }}</span>
+                                        {% if document_request.is_overdue %}<span class="badge badge-danger">Overdue</span>{% endif %}
+                                    </div>
+                                    <small>Requested {{ document_request.submitted_at|date:"F j, Y - g:i A"|default:"—" }}{% if document_request.needed_by_date %} • Needed by {{ document_request.needed_by_date|date:"F j, Y" }}{% endif %}</small>
+                                    {% if document_request.request_note %}<div class="document-description"><strong>My Note:</strong> {{ document_request.request_note|linebreaksbr }}</div>{% endif %}
+                                    {% if document_request.management_note %}<div class="document-description"><strong>Management Note:</strong> {{ document_request.management_note|linebreaksbr }}</div>{% endif %}
+                                    {% if document_request.response_file %}
+                                        <div class="page-actions document-actions-row">
+                                            <a class="btn btn-light btn-sm" href="{% url 'employees:employee_document_request_response_view' document_request.pk %}" target="_blank" rel="noopener">View Reply File</a>
+                                            <a class="btn btn-secondary btn-sm" href="{% url 'employees:employee_document_request_response_download' document_request.pk %}">Download File</a>
+                                        </div>
+                                    {% endif %}
+                                    {% if document_request.can_employee_cancel and can_cancel_employee_document_request %}
+                                        <div class="page-actions document-actions-row">
+                                            <form action="{% url 'employees:employee_document_request_cancel' document_request.pk %}" method="post">
+                                                {% csrf_token %}
+                                                <button class="btn btn-danger btn-sm" type="submit">Cancel Document Request</button>
+                                            </form>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <h3>No document requests submitted yet</h3>
+                        <p>Your certificate and document request history will appear here.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

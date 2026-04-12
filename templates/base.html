@@ -13,9 +13,9 @@
             const DEFAULT_THEME = "premium-dark";
             const ALLOWED_THEMES = ["premium-dark", "premium-light", "dark-accent", "sunrise"];
             const THEME_META_COLORS = {
-                "premium-dark": "#0b111b",
-                "premium-light": "#eef2f7",
-                "dark-accent": "#657166",
+                "premium-dark": "#091426",
+                "premium-light": "#edf4ff",
+                "dark-accent": "#12312d",
                 "sunrise": "#FFF9D4"
             };
 
@@ -65,6 +65,29 @@
             </div>
         </main>
     </div>
+    <div class="floating-theme-switcher" aria-label="Theme mode switcher">
+        <button type="button" class="theme-switcher-btn" data-theme-choice="premium-dark" aria-label="Use dark theme" title="Dark theme">
+            <span class="theme-switcher-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M20.2 14.4A8.5 8.5 0 0 1 9.6 3.8a9.2 9.2 0 1 0 10.6 10.6Z"></path>
+                </svg>
+            </span>
+        </button>
+        <button type="button" class="theme-switcher-btn" data-theme-choice="premium-light" aria-label="Use light theme" title="Light theme">
+            <span class="theme-switcher-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="12" cy="12" r="4.2"></circle>
+                    <path d="M12 2.5v2.3M12 19.2v2.3M21.5 12h-2.3M4.8 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"></path>
+                </svg>
+            </span>
+        </button>
+        <button type="button" class="theme-switcher-btn" data-theme-choice="dark-accent" aria-label="Use mint theme" title="Mint theme">
+            <span class="theme-switcher-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 3c4.9 0 8.6 3.4 8.6 8.4 0 5.6-4.6 9.6-10.4 9.6-3.7 0-6.4-1.7-6.4-4.8 0-2.6 1.8-4.2 4.1-4.2 1.8 0 3 .9 4.1.9 1.8 0 3-1.2 3-3.1C14.9 6 13.8 4.5 12 3Z"></path>
+                </svg>
+            </span>
+        </button>
     </div>
 
 {% block extra_js %}{% endblock %}
@@ -120,9 +143,9 @@
                 const BUTTONS = document.querySelectorAll("[data-theme-choice]");
                 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
                 const metaColors = {
-                    "premium-dark": "#0b111b",
-                    "premium-light": "#eef2f7",
-                    "dark-accent": "#657166",
+                    "premium-dark": "#091426",
+                    "premium-light": "#edf4ff",
+                    "dark-accent": "#12312d",
                     "sunrise": "#FFF9D4"
                 };
 
@@ -144,6 +167,34 @@
                 BUTTONS.forEach(function (button) {
                     button.addEventListener("click", function () {
                         applyTheme(button.dataset.themeChoice);
+                    });
+                });
+
+                document.querySelectorAll(".sidebar-section").forEach(function (section) {
+                    if (
+                        section.classList.contains("sidebar-section-bottom")
+                        || section.classList.contains("sidebar-theme-section")
+                    ) {
+                        return;
+                    }
+                    const title = section.querySelector(".sidebar-title");
+                    const links = section.querySelectorAll("a, form");
+                    if (!title || links.length < 2) {
+                        return;
+                    }
+                    section.classList.add("is-collapsible");
+                    const containsActiveLink = Array.from(section.querySelectorAll("a")).some(function (link) {
+                        try {
+                            return new URL(link.href, window.location.origin).pathname === window.location.pathname;
+                        } catch (error) {
+                            return false;
+                        }
+                    });
+                    if (containsActiveLink) {
+                        section.classList.add("is-open");
+                    }
+                    title.addEventListener("click", function () {
+                        section.classList.toggle("is-open");
                     });
                 });
             });
