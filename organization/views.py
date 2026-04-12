@@ -1,9 +1,11 @@
 from datetime import timedelta
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -109,6 +111,56 @@ def format_text(value, fallback="—"):
     return str(value)
 
 
+PREVIEWABLE_FILE_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp", "gif", "bmp", "txt"}
+
+
+def get_file_extension(file_field):
+    if not file_field or not getattr(file_field, "name", ""):
+        return ""
+    return Path(file_field.name).suffix.lower().lstrip(".")
+
+
+def build_browser_file_response(file_field, *, force_download=False):
+    if not file_field or not getattr(file_field, "name", ""):
+        raise Http404("The requested file is not available.")
+
+    storage = getattr(file_field, "storage", None)
+    if storage and not storage.exists(file_field.name):
+        raise Http404("The requested file is not available on this system.")
+
+    filename = Path(file_field.name).name
+    extension = get_file_extension(file_field)
+    content_type = "application/octet-stream"
+    if extension == "pdf":
+        content_type = "application/pdf"
+    elif extension == "png":
+        content_type = "image/png"
+    elif extension in {"jpg", "jpeg"}:
+        content_type = "image/jpeg"
+    elif extension == "webp":
+        content_type = "image/webp"
+    elif extension == "gif":
+        content_type = "image/gif"
+    elif extension == "bmp":
+        content_type = "image/bmp"
+    elif extension == "txt":
+        content_type = "text/plain"
+
+    as_attachment = force_download or extension not in PREVIEWABLE_FILE_EXTENSIONS
+    file_handle = file_field.open("rb")
+    response = FileResponse(
+        file_handle,
+        as_attachment=as_attachment,
+        filename=filename,
+        content_type=content_type,
+    )
+
+    if not as_attachment:
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+
+    return response
+
+
 def get_document_status_badge_class(document):
     if document.is_expired:
         return "badge-danger"
@@ -154,7 +206,23 @@ def build_branch_document_rows(documents):
                 "days_label": get_document_days_label(document),
                 "is_required": document.is_required,
                 "uploaded_by": document.uploaded_by or "—",
-                "file_url": document.file.url if document.file else "",
+                "has_file": bool(document.file),
+                "view_url": (
+                    reverse(
+                        "organization:branch_document_view",
+                        kwargs={"branch_pk": document.branch_id, "document_pk": document.pk},
+                    )
+                    if document.branch_id and document.file
+                    else ""
+                ),
+                "download_url": (
+                    reverse(
+                        "organization:branch_document_download",
+                        kwargs={"branch_pk": document.branch_id, "document_pk": document.pk},
+                    )
+                    if document.branch_id and document.file
+                    else ""
+                ),
                 "file_name": document.filename or document.title or "Document",
                 "branch_detail_url": (
                     reverse("organization:branch_detail", kwargs={"pk": document.branch_id})
@@ -241,7 +309,23 @@ def build_requirement_rows(requirements, documents):
                 "document_reference_number": selected_document.reference_number if selected_document else "—",
                 "document_issue_date": selected_document.issue_date if selected_document else None,
                 "document_expiry_date": selected_document.expiry_date if selected_document else None,
-                "document_file_url": selected_document.file.url if selected_document and selected_document.file else "",
+                "document_has_file": bool(selected_document and selected_document.file),
+                "document_view_url": (
+                    reverse(
+                        "organization:branch_document_view",
+                        kwargs={"branch_pk": selected_document.branch_id, "document_pk": selected_document.pk},
+                    )
+                    if selected_document and selected_document.file and selected_document.branch_id
+                    else ""
+                ),
+                "document_download_url": (
+                    reverse(
+                        "organization:branch_document_download",
+                        kwargs={"branch_pk": selected_document.branch_id, "document_pk": selected_document.pk},
+                    )
+                    if selected_document and selected_document.file and selected_document.branch_id
+                    else ""
+                ),
                 "status_label": status_payload["status_label"],
                 "status_badge_class": status_payload["badge_class"],
                 "days_label": status_payload["days_label"],
@@ -1809,3 +1893,23 @@ def branch_document_delete(request, branch_pk, document_pk):
     if next_url:
         return redirect(next_url)
     return redirect("organization:branch_detail", pk=branch.pk)
+
+
+def branch_document_view(request, branch_pk, document_pk):
+    branch = get_object_or_404(Branch.objects.select_related("company"), pk=branch_pk)
+    branch_document = get_object_or_404(BranchDocument, pk=document_pk, branch=branch)
+
+    if not can_view_branch_documents(request.user, branch):
+        raise PermissionDenied("You do not have permission to access this branch document.")
+
+    return build_browser_file_response(branch_document.file, force_download=False)
+
+
+def branch_document_download(request, branch_pk, document_pk):
+    branch = get_object_or_404(Branch.objects.select_related("company"), pk=branch_pk)
+    branch_document = get_object_or_404(BranchDocument, pk=document_pk, branch=branch)
+
+    if not can_view_branch_documents(request.user, branch):
+        raise PermissionDenied("You do not have permission to access this branch document.")
+
+    return build_browser_file_response(branch_document.file, force_download=True)

@@ -552,6 +552,10 @@ def build_browser_file_response(file_field, *, force_download=False):
     if not file_field or not getattr(file_field, "name", ""):
         raise Http404("The requested file is not available.")
 
+    storage = getattr(file_field, "storage", None)
+    if storage and not storage.exists(file_field.name):
+        raise Http404("The requested file is not available on this system.")
+
     filename = Path(file_field.name).name
     extension = get_file_extension(file_field)
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"

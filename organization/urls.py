@@ -28,9 +28,11 @@ from .views import (
     SectionListView,
     SectionUpdateView,
     branch_document_create,
+    branch_document_download,
     branch_document_delete,
     branch_document_requirement_create,
     branch_document_requirement_delete,
+    branch_document_view,
 )
 
 app_name = "organization"
@@ -49,6 +51,8 @@ urlpatterns = [
     path("branches/<int:pk>/update/", BranchUpdateView.as_view(), name="branch_update"),
     path("branches/<int:pk>/delete/", BranchDeleteView.as_view(), name="branch_delete"),
     path("branches/<int:pk>/documents/create/", branch_document_create, name="branch_document_create"),
+    path("branches/<int:branch_pk>/documents/<int:document_pk>/view/", branch_document_view, name="branch_document_view"),
+    path("branches/<int:branch_pk>/documents/<int:document_pk>/download/", branch_document_download, name="branch_document_download"),
     path("branches/<int:branch_pk>/documents/<int:document_pk>/delete/", branch_document_delete, name="branch_document_delete"),
     path("branches/<int:pk>/document-requirements/create/", branch_document_requirement_create, name="branch_document_requirement_create"),
     path("branches/<int:branch_pk>/document-requirements/<int:requirement_pk>/delete/", branch_document_requirement_delete, name="branch_document_requirement_delete"),

@@ -20,7 +20,7 @@
         <div class="card-body">
             {% if form.errors %}
                 <div class="alert alert-danger">
-                    Your username/password combination was not accepted. Please try again.
+                    Your email/password combination was not accepted. Please try again.
                 </div>
             {% endif %}
 
@@ -41,13 +41,13 @@
 
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="{{ form.username.id_for_label }}">Username</label>
+                        <label for="{{ form.username.id_for_label }}">Email</label>
                         {{ form.username }}
                         {% if form.username.errors %}
                             <div class="form-error">{{ form.username.errors }}</div>
                         {% endif %}
                         <small class="form-help">
-                            Sign in using the linked login username created from the employee form.
+                            Sign in using the linked login email created from the employee form.
                         </small>
                     </div>
 

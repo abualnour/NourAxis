@@ -81,9 +81,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+
+def _build_local_postgres_url() -> str | None:
+    """Build a PostgreSQL URL from discrete env vars when DATABASE_URL isn't set."""
+    name = os.environ.get("POSTGRES_DB", "nouraxis_local").strip()
+    user = os.environ.get("POSTGRES_USER", "postgres").strip()
+    password = os.environ.get("POSTGRES_PASSWORD", "postgres").strip()
+    host = os.environ.get("POSTGRES_HOST", "127.0.0.1").strip()
+    port = os.environ.get("POSTGRES_PORT", "").strip() or "5432"
+
+    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+
+database_url = (
+    os.environ.get("DATABASE_URL", "").strip()
+    or os.environ.get("LOCAL_DATABASE_URL", "").strip()
+    or _build_local_postgres_url()
+)
+
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=database_url,
         conn_max_age=600,
     )
 }
@@ -121,7 +138,10 @@ STORAGES = {
 }
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = Path(os.environ.get("RENDER_DISK_MOUNT_PATH", "/var/data/media")) 
+if os.environ.get("RENDER_DISK_MOUNT_PATH"):
+    MEDIA_ROOT = Path(os.environ["RENDER_DISK_MOUNT_PATH"])
+else:
+    MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -152,7 +172,6 @@ HR_BACKUP_ROOT = Path.home() / "Desktop" / "NourAxis_Backups"
 # Only these project items will be included in the generated zip.
 HR_BACKUP_INCLUDE_PATHS = [
     "manage.py",
-    "db.sqlite3",
     "media",
     "employees",
     "organization",
@@ -165,6 +184,9 @@ HR_BACKUP_INCLUDE_PATHS = [
     "config",
     "requirements.txt",
 ]
+
+if (BASE_DIR / "db.sqlite3").exists():
+    HR_BACKUP_INCLUDE_PATHS.insert(1, "db.sqlite3")
 
 # Prevent recursive/self backups and avoid noisy folders.
 HR_BACKUP_EXCLUDE_DIR_NAMES = {

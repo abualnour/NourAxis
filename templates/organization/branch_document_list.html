@@ -316,8 +316,12 @@
                                     <td>
                                         <div class="table-stack">
                                             <strong>{{ row.document_title }}</strong>
-                                            {% if row.document_file_url %}
-                                                <small><a href="{{ row.document_file_url }}" target="_blank" rel="noopener" class="org-name-link">Open file</a></small>
+                                            {% if row.document_has_file %}
+                                                <small>
+                                                    <a href="{{ row.document_view_url }}" target="_blank" rel="noopener" class="org-name-link">View file</a>
+                                                    ·
+                                                    <a href="{{ row.document_download_url }}" class="org-name-link">Download file</a>
+                                                </small>
                                             {% else %}
                                                 <small>No file uploaded</small>
                                             {% endif %}
@@ -435,8 +439,9 @@
                                     <td>{{ row.uploaded_by|default:"—" }}</td>
                                     <td>
                                         <div class="page-actions document-actions-row">
-                                            {% if row.file_url %}
-                                                <a href="{{ row.file_url }}" target="_blank" rel="noopener" class="btn btn-light btn-sm">Open</a>
+                                            {% if row.has_file %}
+                                                <a href="{{ row.view_url }}" target="_blank" rel="noopener" class="btn btn-light btn-sm">View</a>
+                                                <a href="{{ row.download_url }}" class="btn btn-secondary btn-sm">Download</a>
                                             {% endif %}
                                             {% if row.branch_detail_url %}
                                                 <a href="{{ row.branch_detail_url }}" class="btn btn-light btn-sm">Branch</a>

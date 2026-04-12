@@ -19,6 +19,9 @@ htmlcov/
 dist/
 build/
 *.log
+server_backup_inspect/
+*.dump
+*.tar.gz
 .DS_Store
 Thumbs.db
 .idea/
