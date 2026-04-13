@@ -4223,16 +4223,39 @@ input[type="date"]::-webkit-datetime-edit-year-field,
 .profile-modal-shell {
     padding: 12px;
     overflow-y: auto;
+    align-items: center;
 }
 
 .profile-modal-dialog {
     width: min(880px, calc(100vw - 24px));
     margin: auto;
     align-self: center;
+    max-height: calc(100vh - 24px);
+    display: flex;
 }
 
 .profile-modal-page {
+    width: 100%;
     max-height: calc(100vh - 24px);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+}
+
+.profile-modal-form {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+}
+
+.profile-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.profile-modal-footer {
+    flex-wrap: wrap;
 }
 
 .profile-modal-header,
@@ -4346,10 +4369,11 @@ input[type="date"]::-webkit-datetime-edit-year-field,
 
 .profile-modal-dialog {
     width: min(840px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
 }
 
 .profile-modal-page {
-    max-height: min(680px, calc(100vh - 24px));
+    max-height: calc(100vh - 24px);
 }
 
 .profile-modal-header,
@@ -4607,16 +4631,25 @@ input[type="date"]::-webkit-datetime-edit-year-field,
         grid-template-columns: 1fr;
         align-items: flex-start;
     }
-
     .profile-modal-dialog {
         width: min(100vw - 12px, 920px);
+        max-height: calc(100vh - 12px);
     }
-
     .profile-modal-page {
         max-height: calc(100vh - 12px);
         border-radius: 18px;
     }
 
+    .profile-modal-form {
+        min-height: 0;
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        overflow: hidden;
+    }
+    .profile-modal-body {
+        min-height: 0;
+        overflow-y: auto;
+    }
     .profile-modal-header,
     .profile-modal-footer,
     .profile-modal-body {
