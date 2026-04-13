@@ -4,11 +4,13 @@
     gap: 22px;
 }
 
-.system-home-hero,
+.system-home-hero {
+    min-height: 0;
+}
+
 .auth-modern-stage {
     min-height: calc(100vh - 150px);
 }
-
 .system-home-hero {
     display: grid;
 }
