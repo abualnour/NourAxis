@@ -272,7 +272,7 @@
                                 </td>
                                 <td>
                                     <div class="table-stack">
-                                        <strong><a class="org-name-link" href="{% url 'employees:employee_detail' record.employee.pk %}">{{ record.employee.full_name }}</a></strong>
+                                        <strong><a class="org-name-link" href="{% url 'employees:employee_detail' record.employee.pk %}?tab=performance#employee-timeline-section">{{ record.employee.full_name }}</a></strong>
                                         <span>{{ record.employee.employee_id }}</span>
                                         {% if record.employee.email %}<small>{{ record.employee.email }}</small>{% endif %}
                                     </div>
@@ -407,7 +407,7 @@
                                 </td>
                                 <td>
                                     <div class="table-stack">
-                                        <strong><a class="org-name-link" href="{% url 'employees:employee_detail' correction.employee.pk %}">{{ correction.employee.full_name }}</a></strong>
+                                        <strong><a class="org-name-link" href="{% url 'employees:employee_detail' correction.employee.pk %}?tab=performance#employee-timeline-section">{{ correction.employee.full_name }}</a></strong>
                                         <span>{{ correction.employee.employee_id }}</span>
                                     </div>
                                 </td>

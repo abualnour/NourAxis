@@ -14,13 +14,15 @@
             <div class="system-home-brand">
                 <img src="{% static 'brand/nouraxis-logo.png' %}" alt="NourAxis logo" class="system-home-logo">
                 <div>
-                    <span class="system-home-kicker">NourAxis</span>
-                    <h1 class="system-home-title">Connected HR workspace for daily operations</h1>
+                    <span class="system-home-kicker">NourAxis Platform</span>
+                    <h1 class="system-home-title">One HR space for branches, teams, attendance, and daily operations</h1>
                 </div>
             </div>
+
             <p class="system-home-lead">
-                A cleaner mobile-friendly entry page for employee self-service, branch supervision, operations control, and HR management.
+                A more distinctive home page built for real work, with a stronger first impression and a clearer path into self-service, supervision, and management tools.
             </p>
+
             <div class="system-home-actions">
                 {% if user.is_authenticated and linked_employee %}
                     <a href="{% url 'employees:self_service_profile' %}" class="btn btn-primary">Open My Workspace</a>
@@ -30,24 +32,54 @@
                     <a href="{% url 'login' %}" class="btn btn-primary">Sign In</a>
                 {% endif %}
                 {% if can_view_dashboard %}
-                    <a href="{% url 'dashboard_home' %}" class="btn btn-secondary">Dashboard</a>
+                    <a href="{% url 'dashboard_home' %}" class="btn btn-secondary">Go to Dashboard</a>
                 {% endif %}
+            </div>
+
+            <div class="system-home-badges">
+                <span class="system-home-pill">Employee Self-Service</span>
+                <span class="system-home-pill">Branch Supervision</span>
+                <span class="system-home-pill">Attendance Control</span>
+                <span class="system-home-pill">Organization Management</span>
             </div>
         </div>
     </section>
 
-    <section class="system-home-grid">
-        <article class="system-home-card">
-            <h2>Employees</h2>
-            <p>Self profile, leave, documents, attendance, working time, and branch access from dedicated pages.</p>
+    <section class="system-home-feature-grid">
+        <article class="system-home-feature-card system-home-feature-card-large">
+            <span class="system-home-feature-kicker">Daily Flow</span>
+            <h2>Move from login to action faster</h2>
+            <p>Open requests, branch pages, schedules, attendance, and employee records from a cleaner connected workspace.</p>
         </article>
-        <article class="system-home-card">
-            <h2>Management</h2>
-            <p>Employee requests, branch documents, attendance management, and organization control in one system.</p>
+
+        <article class="system-home-feature-card">
+            <span class="system-home-feature-kicker">Employees</span>
+            <h2>Profiles and self-service</h2>
+            <p>Profile, leave, documents, attendance, working time, and branch access from dedicated pages.</p>
         </article>
-        <article class="system-home-card">
-            <h2>Mobile Ready</h2>
-            <p>Smaller cards, lighter sections, and simpler page actions for phone browsers.</p>
+
+        <article class="system-home-feature-card">
+            <span class="system-home-feature-kicker">Supervision</span>
+            <h2>Branch and team follow-up</h2>
+            <p>Monitor team activity, open weekly schedule pages, and follow branch requests in one place.</p>
+        </article>
+
+        <article class="system-home-feature-card">
+            <span class="system-home-feature-kicker">Management</span>
+            <h2>Organization control</h2>
+            <p>Handle directory access, attendance management, requests, and company structure from a modern dashboard.</p>
+        </article>
+
+        <article class="system-home-feature-card">
+            <span class="system-home-feature-kicker">HR Workspace</span>
+            <h2>Policies, compliance, and people operations</h2>
+            <p>Build an HR control layer for requests, internal announcements, employee actions, and compliance follow-up.</p>
+        </article>
+
+        <article class="system-home-feature-card">
+            <span class="system-home-feature-kicker">Payroll Workspace</span>
+            <h2>Salary and pay-cycle management</h2>
+            <p>Prepare payroll profiles, pay periods, and employee payout lines directly inside the platform.</p>
         </article>
     </section>
 </div>

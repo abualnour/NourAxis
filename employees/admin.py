@@ -1,6 +1,12 @@
 from django.contrib import admin
 
 from .models import (
+    BranchScheduleGridCell,
+    BranchScheduleGridHeader,
+    BranchScheduleGridRow,
+    BranchWeeklyDutyOption,
+    BranchWeeklyPendingOff,
+    BranchWeeklyScheduleEntry,
     Employee,
     EmployeeActionRecord,
     EmployeeAttendanceLedger,
@@ -366,3 +372,92 @@ class EmployeeAttendanceLedgerAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+@admin.register(BranchWeeklyScheduleEntry)
+class BranchWeeklyScheduleEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        "schedule_date",
+        "branch",
+        "employee",
+        "title",
+        "shift_label",
+        "status",
+        "updated_at",
+    )
+    list_filter = (
+        "branch",
+        "status",
+        "week_start",
+        "schedule_date",
+    )
+    search_fields = (
+        "title",
+        "shift_label",
+        "order_note",
+        "employee__full_name",
+        "employee__employee_id",
+        "branch__name",
+    )
+    readonly_fields = ("week_start", "created_at", "updated_at")
+    list_select_related = ("branch", "employee")
+    autocomplete_fields = ("branch", "employee", "duty_option")
+    ordering = ("-schedule_date", "branch__name", "employee__full_name", "-id")
+
+
+@admin.register(BranchWeeklyDutyOption)
+class BranchWeeklyDutyOptionAdmin(admin.ModelAdmin):
+    list_display = (
+        "label",
+        "branch",
+        "duty_type",
+        "default_start_time",
+        "default_end_time",
+        "display_order",
+        "is_active",
+    )
+    list_filter = ("branch", "duty_type", "is_active")
+    search_fields = ("label", "branch__name")
+    list_select_related = ("branch",)
+    autocomplete_fields = ("branch",)
+    ordering = ("branch__name", "display_order", "label")
+
+
+@admin.register(BranchWeeklyPendingOff)
+class BranchWeeklyPendingOffAdmin(admin.ModelAdmin):
+    list_display = ("week_start", "branch", "employee", "pending_off_count", "updated_at")
+    list_filter = ("branch", "week_start")
+    search_fields = ("employee__full_name", "employee__employee_id", "branch__name")
+    list_select_related = ("branch", "employee")
+    autocomplete_fields = ("branch", "employee")
+    ordering = ("-week_start", "branch__name", "employee__full_name")
+
+
+@admin.register(BranchScheduleGridCell)
+class BranchScheduleGridCellAdmin(admin.ModelAdmin):
+    list_display = ("branch", "row_index", "column_index", "updated_at")
+    list_filter = ("branch", "column_index")
+    search_fields = ("branch__name", "value")
+    list_select_related = ("branch",)
+    autocomplete_fields = ("branch",)
+    ordering = ("branch__name", "row_index", "column_index")
+
+
+@admin.register(BranchScheduleGridHeader)
+class BranchScheduleGridHeaderAdmin(admin.ModelAdmin):
+    list_display = ("branch", "column_index", "label", "updated_at")
+    list_filter = ("branch",)
+    search_fields = ("branch__name", "label")
+    list_select_related = ("branch",)
+    autocomplete_fields = ("branch",)
+    ordering = ("branch__name", "column_index")
+
+
+@admin.register(BranchScheduleGridRow)
+class BranchScheduleGridRowAdmin(admin.ModelAdmin):
+    list_display = ("branch", "row_index", "employee", "updated_at")
+    list_filter = ("branch",)
+    search_fields = ("branch__name", "employee__full_name", "employee__employee_id")
+    list_select_related = ("branch", "employee")
+    autocomplete_fields = ("branch", "employee")
+    ordering = ("branch__name", "row_index")

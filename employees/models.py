@@ -1823,6 +1823,378 @@ class EmployeeDocumentRequest(models.Model):
 
 
 
+def get_schedule_week_start(target_date):
+    if not target_date:
+        return None
+
+    sunday_weekday = 6
+    offset = (target_date.weekday() - sunday_weekday) % 7
+    return target_date - timedelta(days=offset)
+
+
+class BranchWeeklyScheduleEntry(models.Model):
+    DUTY_TYPE_SHIFT = "shift"
+    DUTY_TYPE_OFF = "off"
+    DUTY_TYPE_EXTRA_OFF = "extra_off"
+    DUTY_TYPE_CUSTOM = "custom"
+
+    DUTY_TYPE_CHOICES = [
+        (DUTY_TYPE_SHIFT, "Shift"),
+        (DUTY_TYPE_OFF, "Off"),
+        (DUTY_TYPE_EXTRA_OFF, "Extra Off"),
+        (DUTY_TYPE_CUSTOM, "Custom Duty"),
+    ]
+
+    STATUS_PLANNED = "planned"
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_ON_HOLD = "on_hold"
+
+    STATUS_CHOICES = [
+        (STATUS_PLANNED, "Planned"),
+        (STATUS_IN_PROGRESS, "In Progress"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_ON_HOLD, "On Hold"),
+    ]
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="weekly_schedule_entries",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="branch_weekly_schedule_entries",
+    )
+    week_start = models.DateField(db_index=True)
+    schedule_date = models.DateField(db_index=True)
+    duty_option = models.ForeignKey(
+        "BranchWeeklyDutyOption",
+        on_delete=models.SET_NULL,
+        related_name="schedule_entries",
+        null=True,
+        blank=True,
+    )
+    title = models.CharField(max_length=255, blank=True, default="")
+    duty_type = models.CharField(
+        max_length=20,
+        choices=DUTY_TYPE_CHOICES,
+        default=DUTY_TYPE_SHIFT,
+    )
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    shift_label = models.CharField(max_length=100, blank=True)
+    order_note = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PLANNED,
+    )
+    created_by = models.CharField(max_length=150, blank=True)
+    updated_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["schedule_date", "employee__full_name", "title", "id"]
+        unique_together = ("branch", "employee", "schedule_date")
+
+    def __str__(self):
+        return f"{self.branch.name} | {self.employee.full_name} | {self.schedule_date} | {self.title}"
+
+    def clean(self):
+        errors = {}
+
+        calculated_week_start = get_schedule_week_start(self.schedule_date)
+        if self.schedule_date and self.week_start and self.week_start != calculated_week_start:
+            errors["week_start"] = "Week start must match the selected schedule date."
+
+        if self.employee_id and self.branch_id and self.employee.branch_id != self.branch_id:
+            errors["employee"] = "Selected employee must belong to the selected branch."
+
+        if self.duty_option_id and self.duty_option.branch_id != self.branch_id:
+            errors["duty_option"] = "Selected duty option must belong to the same branch."
+
+        if self.duty_type == self.DUTY_TYPE_SHIFT:
+            if bool(self.start_time) != bool(self.end_time):
+                errors["end_time"] = "Start time and end time are both required for a shift."
+            elif self.start_time and self.end_time and self.end_time <= self.start_time:
+                errors["end_time"] = "End time must be later than start time."
+        else:
+            self.start_time = None
+            self.end_time = None
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.schedule_date:
+            self.week_start = get_schedule_week_start(self.schedule_date)
+
+        if self.duty_option_id:
+            self.duty_type = self.duty_option.duty_type
+            self.shift_label = self.duty_option.label
+            if self.duty_option.duty_type == self.DUTY_TYPE_SHIFT:
+                self.start_time = self.duty_option.default_start_time
+                self.end_time = self.duty_option.default_end_time
+            else:
+                self.start_time = None
+                self.end_time = None
+
+        self.title = (self.title or "").strip()
+        self.shift_label = (self.shift_label or "").strip()
+        self.order_note = (self.order_note or "").strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def status_badge_class(self):
+        mapping = {
+            self.STATUS_PLANNED: "badge-light",
+            self.STATUS_IN_PROGRESS: "badge-primary",
+            self.STATUS_COMPLETED: "badge-success",
+            self.STATUS_ON_HOLD: "badge-warning",
+        }
+        return mapping.get(self.status, "badge-light")
+
+    @property
+    def sheet_value(self):
+        if self.duty_type == self.DUTY_TYPE_OFF:
+            return "off"
+        if self.duty_type == self.DUTY_TYPE_EXTRA_OFF:
+            return "extra off"
+        if self.duty_type == self.DUTY_TYPE_CUSTOM:
+            return self.title or self.shift_label or "custom"
+
+        if self.start_time and self.end_time:
+            start_label = self.start_time.strftime("%I %p").lstrip("0").lower()
+            end_label = self.end_time.strftime("%I %p").lstrip("0").lower()
+            return f"{start_label} to {end_label}"
+
+        return self.title or self.shift_label or "shift"
+
+    @property
+    def sheet_detail(self):
+        if self.duty_type == self.DUTY_TYPE_SHIFT and self.title:
+            return self.title
+        if self.shift_label:
+            return self.shift_label
+        return ""
+
+    @property
+    def sheet_cell_class(self):
+        if self.duty_type in {self.DUTY_TYPE_OFF, self.DUTY_TYPE_EXTRA_OFF}:
+            return "is-off"
+        if self.duty_type == self.DUTY_TYPE_CUSTOM:
+            return "is-custom"
+        if self.start_time and self.start_time.hour < 12:
+            return "is-morning"
+        return "is-shift"
+
+
+class BranchWeeklyDutyOption(models.Model):
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="weekly_duty_options",
+    )
+    label = models.CharField(max_length=120)
+    duty_type = models.CharField(
+        max_length=20,
+        choices=BranchWeeklyScheduleEntry.DUTY_TYPE_CHOICES,
+        default=BranchWeeklyScheduleEntry.DUTY_TYPE_SHIFT,
+    )
+    default_start_time = models.TimeField(null=True, blank=True)
+    default_end_time = models.TimeField(null=True, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "label", "id"]
+        unique_together = ("branch", "label")
+
+    def __str__(self):
+        return f"{self.branch.name} | {self.label}"
+
+    def clean(self):
+        errors = {}
+        if self.duty_type == BranchWeeklyScheduleEntry.DUTY_TYPE_SHIFT:
+            if bool(self.default_start_time) != bool(self.default_end_time):
+                errors["default_end_time"] = "Shift options need both start time and end time."
+            elif (
+                self.default_start_time
+                and self.default_end_time
+                and self.default_end_time <= self.default_start_time
+            ):
+                errors["default_end_time"] = "Default end time must be later than default start time."
+        else:
+            self.default_start_time = None
+            self.default_end_time = None
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.label = (self.label or "").strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def preview_label(self):
+        if self.duty_type == BranchWeeklyScheduleEntry.DUTY_TYPE_SHIFT and self.default_start_time and self.default_end_time:
+            start_label = self.default_start_time.strftime("%I %p").lstrip("0").lower()
+            end_label = self.default_end_time.strftime("%I %p").lstrip("0").lower()
+            return f"{self.label} · {start_label} to {end_label}"
+        return self.label
+
+
+class BranchWeeklyPendingOff(models.Model):
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="weekly_pending_off_records",
+    )
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="weekly_pending_off_records",
+    )
+    week_start = models.DateField(db_index=True)
+    pending_off_count = models.PositiveIntegerField(default=0)
+    created_by = models.CharField(max_length=150, blank=True)
+    updated_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["week_start", "employee__full_name", "id"]
+        unique_together = ("branch", "employee", "week_start")
+
+    def __str__(self):
+        return f"{self.branch.name} | {self.employee.full_name} | {self.week_start} | {self.pending_off_count}"
+
+    def clean(self):
+        errors = {}
+        if self.employee_id and self.branch_id and self.employee.branch_id != self.branch_id:
+            errors["employee"] = "Selected employee must belong to the selected branch."
+        if self.week_start and self.week_start != get_schedule_week_start(self.week_start):
+            errors["week_start"] = "Pending off week must use the start date of that week."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.week_start:
+            self.week_start = get_schedule_week_start(self.week_start)
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class BranchScheduleGridHeader(models.Model):
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="schedule_grid_headers",
+    )
+    column_index = models.PositiveSmallIntegerField()
+    label = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["column_index", "id"]
+        unique_together = ("branch", "column_index")
+
+    def __str__(self):
+        return f"{self.branch.name} | Header {self.column_index}"
+
+    def clean(self):
+        errors = {}
+        if self.column_index < 0 or self.column_index > 11:
+            errors["column_index"] = "Header column index must stay between 0 and 11."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.label = (self.label or "").strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class BranchScheduleGridRow(models.Model):
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="schedule_grid_rows",
+    )
+    row_index = models.PositiveSmallIntegerField()
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        related_name="assigned_schedule_grid_rows",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["row_index", "id"]
+        unique_together = ("branch", "row_index")
+
+    def __str__(self):
+        return f"{self.branch.name} | Row {self.row_index}"
+
+    def clean(self):
+        errors = {}
+        if self.employee_id and self.employee.branch_id != self.branch_id:
+            errors["employee"] = "Selected employee must belong to the same branch."
+        if self.row_index < 1:
+            errors["row_index"] = "Row index must be at least 1."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class BranchScheduleGridCell(models.Model):
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="schedule_grid_cells",
+    )
+    row_index = models.PositiveSmallIntegerField()
+    column_index = models.PositiveSmallIntegerField()
+    value = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["row_index", "column_index", "id"]
+        unique_together = ("branch", "row_index", "column_index")
+
+    def __str__(self):
+        return f"{self.branch.name} | Row {self.row_index} | Column {self.column_index}"
+
+    def clean(self):
+        errors = {}
+        if self.row_index < 1:
+            errors["row_index"] = "Row index must be at least 1."
+        if self.column_index < 1 or self.column_index > 10:
+            errors["column_index"] = "Column index must stay between 1 and 10."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.value = (self.value or "").strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
 class EmployeeDocument(models.Model):
     DOCUMENT_TYPE_GENERAL = "general"
     DOCUMENT_TYPE_CONTRACT = "contract"

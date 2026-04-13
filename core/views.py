@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -20,7 +20,16 @@ from django.views.generic import TemplateView
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
-from employees.models import Employee, EmployeeAttendanceEvent, EmployeeAttendanceLedger, EmployeeLeave
+from employees.models import (
+    Employee,
+    EmployeeActionRecord,
+    EmployeeAttendanceEvent,
+    EmployeeAttendanceLedger,
+    EmployeeDocumentRequest,
+    EmployeeLeave,
+    EmployeeRequiredSubmission,
+)
+from hr.models import HRAnnouncement, HRPolicy
 from organization.models import (
     Branch,
     BranchDocument,
@@ -30,6 +39,7 @@ from organization.models import (
     JobTitle,
     Section,
 )
+from payroll.models import PayrollObligation, PayrollPeriod
 
 class DashboardHomeView(LoginRequiredMixin, TemplateView):
     template_name = "core/dashboard_home.html"
@@ -410,6 +420,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        today = timezone.localdate()
         employee_profile = self.get_employee_profile()
         scoped_branch = self.get_scoped_branch(user, employee_profile)
         supervisor_setup_required = bool(
@@ -426,6 +437,11 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                 or self.is_operations_manager_user(user)
                 or scoped_branch
             )
+        )
+        is_executive_dashboard = bool(
+            (self.is_admin_compatible(user) or getattr(user, "is_superuser", False))
+            and scoped_branch is None
+            and not is_employee_self_service_dashboard
         )
 
         if is_employee_self_service_dashboard:
@@ -472,6 +488,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
         recent_hires = list(
             employee_queryset.filter(hire_date__isnull=False).order_by("-hire_date", "-id")[:8]
         )
+        recent_employees = list(employee_queryset.order_by("-created_at", "-id")[:8])
         employees_by_company = list(
             employee_queryset.exclude(company__isnull=True)
             .values("company__name")
@@ -496,13 +513,141 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
             or self.is_hr_user(user)
             or self.is_operations_manager_user(user)
         )
+        leave_queryset = EmployeeLeave.objects.select_related("employee", "employee__branch")
+        document_request_queryset = EmployeeDocumentRequest.objects.select_related("employee", "employee__branch")
+        attendance_event_queryset = EmployeeAttendanceEvent.objects.select_related("employee", "employee__branch")
+        attendance_ledger_queryset = EmployeeAttendanceLedger.objects.select_related("employee", "employee__branch")
+
+        if scoped_branch:
+            leave_queryset = leave_queryset.filter(employee__branch_id=scoped_branch.id)
+            document_request_queryset = document_request_queryset.filter(employee__branch_id=scoped_branch.id)
+            attendance_event_queryset = attendance_event_queryset.filter(employee__branch_id=scoped_branch.id)
+            attendance_ledger_queryset = attendance_ledger_queryset.filter(employee__branch_id=scoped_branch.id)
+
+        pending_leave_queue = list(
+            leave_queryset.filter(status=EmployeeLeave.STATUS_PENDING).order_by("-created_at", "-id")[:6]
+        )
+        open_document_request_queue = list(
+            document_request_queryset.filter(status=EmployeeDocumentRequest.STATUS_REQUESTED).order_by("-created_at", "-id")[:6]
+        )
+        open_attendance_sessions = list(
+            attendance_event_queryset.filter(status=EmployeeAttendanceEvent.STATUS_OPEN).order_by("-check_in_at", "-id")[:6]
+        )
+        attendance_exceptions = list(
+            attendance_ledger_queryset.filter(
+                attendance_date=today,
+                day_status__in=[
+                    EmployeeAttendanceLedger.DAY_STATUS_ABSENT,
+                    EmployeeAttendanceLedger.DAY_STATUS_UNPAID_LEAVE,
+                    EmployeeAttendanceLedger.DAY_STATUS_OTHER,
+                ],
+            ).order_by("employee__full_name")[:6]
+        )
+        recent_leave_activity = list(
+            leave_queryset.order_by("-updated_at", "-created_at", "-id")[:6]
+        )
+        operations_quick_links = []
+        if scoped_branch:
+            operations_quick_links.append({"label": "My Branch", "url": reverse("employees:self_service_branch")})
+            operations_quick_links.append({"label": "Weekly Schedule", "url": reverse("employees:self_service_weekly_schedule")})
+        if (
+            self.is_admin_compatible(user)
+            or self.is_hr_user(user)
+            or self.is_operations_manager_user(user)
+            or scoped_branch
+        ):
+            operations_quick_links.append({"label": "Attendance Management", "url": reverse("employees:attendance_management")})
+            operations_quick_links.append({"label": "Action Center", "url": reverse("employees:employee_admin_action_center")})
+            operations_quick_links.append({"label": "Employee Requests", "url": reverse("employees:employee_requests_overview")})
+        operational_status_cards = [
+            {
+                "label": "Open Attendance",
+                "value": len(open_attendance_sessions),
+                "tone": "neutral",
+                "help_text": "Employees still checked in and not checked out yet.",
+            },
+            {
+                "label": "Attendance Exceptions",
+                "value": len(attendance_exceptions),
+                "tone": "warning",
+                "help_text": "Absence or unpaid leave flags from today's attendance ledger.",
+            },
+            {
+                "label": "Pending Leave",
+                "value": len(pending_leave_queue),
+                "tone": "warning",
+                "help_text": "Leave approvals still waiting for review.",
+            },
+            {
+                "label": "Requested Documents",
+                "value": len(open_document_request_queue),
+                "tone": "primary",
+                "help_text": "Employee document requests currently open.",
+            },
+        ]
         branch_compliance_dashboard = (
             self.build_branch_compliance_dashboard() if can_view_organization_setup else None
         )
+        executive_quick_links = [
+            {"label": "HR Control Center", "url": reverse("hr:home")},
+            {"label": "Payroll Workspace", "url": reverse("payroll:home")},
+            {"label": "Attendance Management", "url": reverse("employees:attendance_management")},
+            {"label": "Action Center", "url": reverse("employees:employee_admin_action_center")},
+            {"label": "Organization Setup", "url": reverse("organization:company_list")},
+        ]
+        pending_submission_queue = list(
+            EmployeeRequiredSubmission.objects.exclude(
+                status=EmployeeRequiredSubmission.STATUS_COMPLETED
+            ).select_related("employee").order_by("-updated_at", "-created_at")[:6]
+        )
+        executive_document_queue = list(
+            EmployeeDocumentRequest.objects.filter(
+                status=EmployeeDocumentRequest.STATUS_REQUESTED
+            ).select_related("employee").order_by("-created_at")[:6]
+        )
+        executive_recent_actions = list(
+            EmployeeActionRecord.objects.select_related("employee").order_by("-action_date", "-created_at")[:6]
+        )
+        executive_payroll_periods = list(
+            PayrollPeriod.objects.select_related("company").order_by("-period_start", "-id")[:6]
+        )
+        executive_active_obligations = list(
+            PayrollObligation.objects.select_related("employee", "company").filter(
+                status=PayrollObligation.STATUS_ACTIVE
+            ).order_by("-updated_at", "-id")[:6]
+        )
+        executive_policies = list(
+            HRPolicy.objects.select_related("company").filter(is_active=True).order_by("title")[:6]
+        )
+        executive_announcements = list(
+            HRAnnouncement.objects.filter(is_active=True).order_by("-published_at", "-id")[:5]
+        )
+        executive_status_cards = [
+            {"label": "Total Workforce", "value": employee_queryset.count(), "tone": "neutral"},
+            {"label": "Pending Leave", "value": EmployeeLeave.objects.filter(status=EmployeeLeave.STATUS_PENDING).count(), "tone": "warning"},
+            {"label": "Attendance Exceptions", "value": EmployeeAttendanceLedger.objects.filter(
+                attendance_date=today,
+                day_status__in=[
+                    EmployeeAttendanceLedger.DAY_STATUS_ABSENT,
+                    EmployeeAttendanceLedger.DAY_STATUS_UNPAID_LEAVE,
+                    EmployeeAttendanceLedger.DAY_STATUS_OTHER,
+                ],
+            ).count(), "tone": "warning"},
+            {"label": "Open Document Requests", "value": EmployeeDocumentRequest.objects.filter(
+                status=EmployeeDocumentRequest.STATUS_REQUESTED
+            ).count(), "tone": "primary"},
+            {"label": "Open Submissions", "value": EmployeeRequiredSubmission.objects.exclude(
+                status=EmployeeRequiredSubmission.STATUS_COMPLETED
+            ).count(), "tone": "primary"},
+            {"label": "Live Payroll Cycles", "value": PayrollPeriod.objects.exclude(status=PayrollPeriod.STATUS_PAID).count(), "tone": "neutral"},
+            {"label": "Active Obligations", "value": PayrollObligation.objects.filter(status=PayrollObligation.STATUS_ACTIVE).count(), "tone": "warning"},
+            {"label": "Policies", "value": HRPolicy.objects.filter(is_active=True).count(), "tone": "neutral"},
+        ]
 
         context.update(
             {
                 "is_employee_self_service_dashboard": False,
+                "is_executive_dashboard": is_executive_dashboard,
                 "is_branch_scoped_supervisor": scoped_branch is not None,
                 "scoped_branch": scoped_branch,
                 "metrics": self.build_metrics(employee_queryset),
@@ -511,6 +656,23 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                 "employees_by_company": employees_by_company,
                 "employees_by_branch": employees_by_branch,
                 "employees_by_department": employees_by_department,
+                "operations_today": today,
+                "pending_leave_queue": pending_leave_queue,
+                "open_document_request_queue": open_document_request_queue,
+                "open_attendance_sessions": open_attendance_sessions,
+                "attendance_exceptions": attendance_exceptions,
+                "recent_leave_activity": recent_leave_activity,
+                "operations_quick_links": operations_quick_links,
+                "operational_status_cards": operational_status_cards,
+                "executive_quick_links": executive_quick_links,
+                "executive_status_cards": executive_status_cards,
+                "pending_submission_queue": pending_submission_queue,
+                "executive_document_queue": executive_document_queue,
+                "executive_recent_actions": executive_recent_actions,
+                "executive_payroll_periods": executive_payroll_periods,
+                "executive_active_obligations": executive_active_obligations,
+                "executive_policies": executive_policies,
+                "executive_announcements": executive_announcements,
                 "can_view_employee_directory": bool(
                     self.is_admin_compatible(user)
                     or self.is_hr_user(user)
@@ -524,7 +686,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                 "branch_compliance_dashboard": branch_compliance_dashboard,
                 "supervisor_setup_required": supervisor_setup_required,
                 "supervisor_scope_missing": supervisor_scope_missing,
-                "management_open_attendance_events": EmployeeAttendanceEvent.objects.filter(status=EmployeeAttendanceEvent.STATUS_OPEN).count(),
+                "management_open_attendance_events": attendance_event_queryset.filter(status=EmployeeAttendanceEvent.STATUS_OPEN).count(),
             }
         )
         return context

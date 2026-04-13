@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}HR Workspace{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/platform.css' %}">
+<link rel="stylesheet" href="{% static 'css/hr.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="platform-page hr-control-center-page">
+    <section class="platform-hero hr-control-hero">
+        <div class="platform-hero-copy">
+            <span class="platform-kicker">HR Control Center</span>
+            <h1>One command page for people operations, payroll pressure, attendance risk, and compliance</h1>
+            <p>Use this control center to read today’s HR load fast, respond to employee movement, and keep payroll, leave, documents, and compliance work connected in one operational screen.</p>
+        </div>
+        <div class="platform-hero-side">
+            <div class="platform-side-card">
+                <span>Workforce</span>
+                <strong>{{ employee_total }}</strong>
+                <small>{{ active_employee_total }} active people across the system</small>
+            </div>
+            <div class="platform-side-card">
+                <span>Urgent HR Load</span>
+                <strong>{{ pending_leave_total|add:attendance_exception_total|add:pending_attendance_correction_total }}</strong>
+                <small>Leave, attendance, and correction items active today</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="platform-stats-grid">
+        <article class="platform-stat-card">
+            <span>Pending Leave</span>
+            <strong>{{ pending_leave_total }}</strong>
+            <small>Requests waiting for action</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Attendance Exceptions</span>
+            <strong>{{ attendance_exception_total }}</strong>
+            <small>Absent, unpaid leave, or flagged attendance today</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Open Submissions</span>
+            <strong>{{ open_submission_total }}</strong>
+            <small>Required employee follow-ups still open</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Document Requests</span>
+            <strong>{{ open_document_request_total }}</strong>
+            <small>Documents requested by employees</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Compliance Alerts</span>
+            <strong>{{ compliance_alert_total }}</strong>
+            <small>Passport and Civil ID expiries in the next 30 days</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Live Payroll Cycles</span>
+            <strong>{{ active_payroll_period_total }}</strong>
+            <small>Payroll periods not yet paid</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Active Loans / Advances</span>
+            <strong>{{ active_obligation_total }}</strong>
+            <small>Recurring payroll deductions still running</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Policies</span>
+            <strong>{{ policy_total }}</strong>
+            <small>Active HR policy records</small>
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel platform-panel-wide">
+            <div class="platform-panel-head">
+                <h2>Operational Lanes</h2>
+                <p>These are the core areas HR needs to watch every day to keep the whole system moving smoothly.</p>
+            </div>
+            <div class="platform-feature-grid hr-lane-grid">
+                <div class="platform-feature-card">
+                    <strong>People Movement</strong>
+                    <span>Employee actions, placement changes, status updates, and workforce structure changes.</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Attendance Control</strong>
+                    <span>Daily exceptions, corrections, absence follow-up, and operating discipline.</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Payroll Pressure</strong>
+                    <span>Periods in progress, recurring obligations, and compensation impact across employees.</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Compliance Watch</strong>
+                    <span>Identity expiry signals, policies, and required submissions that need intervention.</span>
+                </div>
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Employment Mix</h2>
+                <p>Current employee status balance across the organization.</p>
+            </div>
+            <div class="platform-list">
+                <div class="platform-list-item">
+                    <div><strong>Active</strong><small>Operational workforce currently active</small></div>
+                    <span class="badge badge-success">{{ employment_mix.active }}</span>
+                </div>
+                <div class="platform-list-item">
+                    <div><strong>On Leave</strong><small>Approved leave status</small></div>
+                    <span class="badge badge-primary">{{ employment_mix.on_leave }}</span>
+                </div>
+                <div class="platform-list-item">
+                    <div><strong>Emergency Leave</strong><small>Emergency leave cases</small></div>
+                    <span class="badge badge-warning">{{ employment_mix.emergency_leave }}</span>
+                </div>
+                <div class="platform-list-item">
+                    <div><strong>Unpaid Leave</strong><small>Unpaid leave cases</small></div>
+                    <span class="badge badge-warning">{{ employment_mix.unpaid_leave }}</span>
+                </div>
+                <div class="platform-list-item">
+                    <div><strong>Inactive</strong><small>Profiles not currently operating</small></div>
+                    <span class="badge badge-danger">{{ employment_mix.inactive }}</span>
+                </div>
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Branch Distribution</h2>
+                <p>Where people are currently concentrated.</p>
+            </div>
+            {% if branch_distribution %}
+                <div class="platform-list">
+                    {% for branch_name, branch_total in branch_distribution %}
+                        <div class="platform-list-item">
+                            <div><strong>{{ branch_name }}</strong><small>Employees linked to this branch</small></div>
+                            <span class="badge badge-light">{{ branch_total }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No branch data yet</h3>
+                    <p>Branch workforce distribution will appear here.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Leave Queue</h2>
+                <p>Pending leave approvals that need HR attention.</p>
+            </div>
+            {% if pending_leaves %}
+                <div class="platform-list">
+                    {% for leave in pending_leaves %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ leave.employee.full_name }}</strong>
+                                <small>{{ leave.get_leave_type_display }} | {{ leave.start_date|date:"M j" }} to {{ leave.end_date|date:"M j" }}</small>
+                            </div>
+                            <span class="badge badge-warning">{{ leave.get_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No pending leave items</h3>
+                    <p>The leave queue is currently clear.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Attendance Exceptions Today</h2>
+                <p>Employees with attendance issues on {{ today|date:"F j, Y" }}.</p>
+            </div>
+            {% if attendance_exceptions %}
+                <div class="platform-list">
+                    {% for entry in attendance_exceptions %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ entry.employee.full_name }}</strong>
+                                <small>{{ entry.attendance_date|date:"M j, Y" }} | {{ entry.attendance_rule_label }}</small>
+                            </div>
+                            <span class="badge {{ entry.day_status_badge_class }}">{{ entry.get_day_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No attendance exceptions today</h3>
+                    <p>There are no flagged attendance records in today’s exception lane.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Correction Queue</h2>
+                <p>Attendance corrections waiting to be reviewed or applied.</p>
+            </div>
+            {% if pending_attendance_corrections %}
+                <div class="platform-list">
+                    {% for correction in pending_attendance_corrections %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ correction.employee.full_name }}</strong>
+                                <small>{{ correction.linked_attendance.attendance_date|date:"M j, Y" }} | {{ correction.reason|truncatechars:70 }}</small>
+                            </div>
+                            <span class="badge badge-warning">{{ correction.get_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No pending corrections</h3>
+                    <p>The attendance correction queue is clear right now.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Document Request Queue</h2>
+                <p>Employee-requested documents that are still waiting to be processed.</p>
+            </div>
+            {% if open_document_requests %}
+                <div class="platform-list">
+                    {% for request_item in open_document_requests %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ request_item.employee.full_name }}</strong>
+                                <small>{{ request_item.title }}{% if request_item.request_type %} | {{ request_item.get_request_type_display }}{% endif %}</small>
+                            </div>
+                            <span class="badge badge-primary">{{ request_item.get_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No open document requests</h3>
+                    <p>The document queue is currently clear.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Compliance Alerts</h2>
+                <p>Identity items that are near expiry and need follow-up.</p>
+            </div>
+            {% if passport_alerts or civil_id_alerts %}
+                <div class="platform-list">
+                    {% for employee in passport_alerts %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ employee.full_name }}</strong>
+                                <small>Passport expires {{ employee.passport_expiry_date|date:"M j, Y" }}</small>
+                            </div>
+                            <span class="badge badge-warning">Passport</span>
+                        </div>
+                    {% endfor %}
+                    {% for employee in civil_id_alerts %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ employee.full_name }}</strong>
+                                <small>Civil ID expires {{ employee.civil_id_expiry_date|date:"M j, Y" }}</small>
+                            </div>
+                            <span class="badge badge-warning">Civil ID</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No near-expiry identity alerts</h3>
+                    <p>Passport and Civil ID compliance looks stable for the next 30 days.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Open Employee Submissions</h2>
+                <p>Required employee documents and actions still waiting to be completed.</p>
+            </div>
+            {% if open_submission_requests %}
+                <div class="platform-list">
+                    {% for item in open_submission_requests %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ item.employee.full_name }}</strong>
+                                <small>{{ item.title }}</small>
+                            </div>
+                            <span class="badge badge-primary">{{ item.get_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No open submissions</h3>
+                    <p>There are no required submission items waiting right now.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Payroll Watch</h2>
+                <p>Payroll periods still in progress and linked compensation obligations.</p>
+            </div>
+            {% if recent_payroll_periods or active_obligations %}
+                <div class="platform-list">
+                    {% for period in recent_payroll_periods %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ period.title }}</strong>
+                                <small>{{ period.company.name }} | {{ period.period_start|date:"M j" }} to {{ period.period_end|date:"M j, Y" }}</small>
+                            </div>
+                            <span class="badge badge-light">{{ period.get_status_display }}</span>
+                        </div>
+                    {% endfor %}
+                    {% for obligation in active_obligations %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ obligation.employee.full_name }} | {{ obligation.title }}</strong>
+                                <small>{{ obligation.get_obligation_type_display }} | Remaining {{ obligation.remaining_installments }} installment{{ obligation.remaining_installments|pluralize }}</small>
+                            </div>
+                            <span class="badge badge-warning">{{ obligation.remaining_balance }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No live payroll items</h3>
+                    <p>Payroll periods and active obligations will appear here when they need attention.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Announcements</h2>
+                <p>Internal communication currently visible inside HR.</p>
+            </div>
+            {% if announcements %}
+                <div class="platform-list">
+                    {% for item in announcements %}
+                        <div class="platform-list-item platform-list-item-stack">
+                            <strong>{{ item.title }}</strong>
+                            <small>{{ item.get_audience_display }} | {{ item.published_at|date:"M j, Y" }}</small>
+                            <span>{{ item.message|truncatechars:120 }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No announcements yet</h3>
+                    <p>Announcements will appear here once HR starts using internal communication records.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Recent Employee Actions</h2>
+                <p>Latest movement and action records affecting the workforce.</p>
+            </div>
+            {% if recent_actions %}
+                <div class="platform-list">
+                    {% for action in recent_actions %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ action.employee.full_name }}</strong>
+                                <small>{{ action.title }} | {{ action.action_date|date:"M j, Y" }}</small>
+                            </div>
+                            <span class="badge badge-light">{{ action.get_action_type_display }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No action records yet</h3>
+                    <p>Workforce actions will appear here when they are created.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Company Distribution</h2>
+                <p>Top companies by employee count in the current workspace.</p>
+            </div>
+            {% if company_distribution %}
+                <div class="platform-list">
+                    {% for company_name, company_total in company_distribution %}
+                        <div class="platform-list-item">
+                            <div><strong>{{ company_name }}</strong><small>Employees linked to this company</small></div>
+                            <span class="badge badge-light">{{ company_total }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No company distribution yet</h3>
+                    <p>Company allocation will appear here once employee data is linked.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Policy Watch</h2>
+                <p>Active HR policies currently shaping the organization.</p>
+            </div>
+            {% if policies %}
+                <div class="platform-list">
+                    {% for policy in policies %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ policy.title }}</strong>
+                                <small>{{ policy.get_category_display }}{% if policy.company %} | {{ policy.company.name }}{% else %} | Global{% endif %}</small>
+                            </div>
+                            <span class="badge badge-light">{{ policy.effective_date|date:"M j, Y" }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No active policies yet</h3>
+                    <p>Policy records will appear here as your HR governance layer grows.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+</div>
+{% endblock %}

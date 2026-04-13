@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Weekly Schedule | {{ employee_display_branch|default:"Branch" }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page branch-schedule-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">{{ employee_display_branch|default:"Branch" }} Weekly Schedule</h1>
+            <p class="page-subtitle">One day per column with shift boxes like a real roster, plus side columns for branch notes, orders, and follow-up.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{{ self_service_branch_url }}">My Branch</a>
+            {% if can_manage_branch_weekly_schedule %}
+                <button class="btn btn-primary" form="free-schedule-grid-form" type="submit">Save Roster</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="card detail-card modern-soft-card branch-compact-panel">
+            <div class="card-header">
+                <div class="section-heading">
+                    <div>
+                        <h2>Weekly Roster Board</h2>
+                        <p class="page-subtitle">Select employees on the left, choose a shift inside each day box, and use the side columns for notes, orders, and follow-up items.</p>
+                    </div>
+                    <span class="badge badge-primary">{{ free_grid_filled_cells }} Filled Cell{{ free_grid_filled_cells|pluralize }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if free_grid_rows %}
+                    <form method="post" id="free-schedule-grid-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="schedule_action" value="save_free_grid">
+
+                        <div class="branch-schedule-sheet-toolbar">
+                            <div class="branch-schedule-sheet-note">
+                                <strong>Roster mode</strong>
+                                <span>Each employee has one row and each day has one shift box. This matches real branch roster planning more closely.</span>
+                            </div>
+                            <div class="branch-schedule-sheet-note">
+                                <strong>Fast input</strong>
+                                <span>Use the dropdown for common shifts, or paste values from Excel and Google Sheets directly into the roster cells.</span>
+                            </div>
+                        </div>
+
+                        <div class="free-schedule-grid-wrap">
+                            <table class="free-schedule-grid-table free-schedule-grid-table-roster">
+                                <thead>
+                                    <tr>
+                                        {% for header in free_grid_headers %}
+                                            <th class="{% if forloop.counter <= 2 %}free-schedule-sticky-col{% endif %}{% if header.theme %} free-schedule-theme-{{ header.theme }}{% endif %}">
+                                                {% if can_manage_branch_weekly_schedule %}
+                                                    <input
+                                                        class="form-control free-grid-header-input"
+                                                        type="text"
+                                                        name="{{ header.input_name }}"
+                                                        value="{{ header.value }}"
+                                                        placeholder="{{ header.default_label }}"
+                                                    >
+                                                {% else %}
+                                                    {{ header.value|default:header.default_label }}
+                                                {% endif %}
+                                            </th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in free_grid_rows %}
+                                        <tr>
+                                            <td class="free-schedule-meta-cell free-schedule-sticky-col">
+                                                {% if can_manage_branch_weekly_schedule %}
+                                                    <select
+                                                        class="form-control free-grid-employee-select"
+                                                        name="{{ row.employee_select_name }}"
+                                                        data-job-target="job-title-{{ row.row_index }}"
+                                                    >
+                                                        <option value="">Select employee</option>
+                                                        {% for option in row.employee_options %}
+                                                            <option
+                                                                value="{{ option.id }}"
+                                                                data-job-title="{{ option.job_title }}"
+                                                                {% if row.employee and row.employee.id == option.id %}selected{% endif %}
+                                                            >
+                                                                {{ option.label }}
+                                                            </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                {% else %}
+                                                    <strong>{{ row.employee.full_name|default:"-" }}</strong>
+                                                {% endif %}
+                                            </td>
+                                            <td class="free-schedule-meta-cell free-schedule-sticky-col" id="job-title-{{ row.row_index }}">
+                                                <span>{{ row.employee_job_title|default:"-" }}</span>
+                                            </td>
+
+                                            {% for cell in row.cells %}
+                                                {% if cell.theme != "notes" and cell.theme != "orders" and cell.theme != "followup" %}
+                                                    <td class="free-schedule-duty-cell free-schedule-theme-{{ cell.theme }}">
+                                                        {% if can_manage_branch_weekly_schedule %}
+                                                            <div class="free-shift-box">
+                                                                <select
+                                                                    class="form-control free-grid-input free-grid-shift-select"
+                                                                    name="{{ cell.input_name }}"
+                                                                    data-row-index="{{ cell.row_index }}"
+                                                                    data-col-index="{{ forloop.counter0 }}"
+                                                                    data-shift-select
+                                                                >
+                                                                    {% for option in free_grid_shift_options %}
+                                                                        <option value="{{ option }}" {% if cell.value == option %}selected{% endif %}>
+                                                                            {{ option|default:"Select shift" }}
+                                                                        </option>
+                                                                    {% endfor %}
+                                                                    {% if cell.value and cell.value not in free_grid_shift_options %}
+                                                                        <option value="{{ cell.value }}" selected>{{ cell.value }}</option>
+                                                                    {% endif %}
+                                                                </select>
+                                                                <span class="free-shift-box-label" data-shift-label>{{ cell.value|default:"Select shift" }}</span>
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="free-grid-readonly free-shift-box-readonly">{{ cell.value|default:"-" }}</div>
+                                                        {% endif %}
+                                                    </td>
+                                                {% else %}
+                                                    <td class="free-schedule-duty-cell free-schedule-theme-{{ cell.theme }}">
+                                                        {% if can_manage_branch_weekly_schedule %}
+                                                            <textarea
+                                                                class="form-control free-grid-input free-grid-textarea"
+                                                                name="{{ cell.input_name }}"
+                                                                data-row-index="{{ cell.row_index }}"
+                                                                data-col-index="{{ forloop.counter0 }}"
+                                                                rows="3"
+                                                            >{{ cell.value }}</textarea>
+                                                        {% else %}
+                                                            <div class="free-grid-readonly">{{ cell.value|default:"-" }}</div>
+                                                        {% endif %}
+                                                    </td>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="empty-state">
+                        <h3>No active team members found</h3>
+                        <p>Assign employees to this branch to start building the roster.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const gridInputs = Array.from(document.querySelectorAll(".free-grid-input"));
+    const employeeSelects = Array.from(document.querySelectorAll(".free-grid-employee-select"));
+    const shiftSelects = Array.from(document.querySelectorAll("[data-shift-select]"));
+
+    function updateShiftLabel(select) {
+        const box = select.closest(".free-shift-box");
+        if (!box) {
+            return;
+        }
+        const label = box.querySelector("[data-shift-label]");
+        if (label) {
+            label.textContent = select.value || "Select shift";
+        }
+        box.setAttribute("data-shift-value", (select.value || "").toLowerCase());
+    }
+
+    shiftSelects.forEach(function (select) {
+        updateShiftLabel(select);
+        select.addEventListener("change", function () {
+            updateShiftLabel(select);
+        });
+    });
+
+    if (!gridInputs.length) {
+        employeeSelects.forEach(function (select) {
+            select.addEventListener("change", function () {
+                const selectedOption = select.options[select.selectedIndex];
+                const jobTarget = document.getElementById(select.dataset.jobTarget);
+                if (jobTarget) {
+                    jobTarget.innerHTML = "<span>" + ((selectedOption && selectedOption.dataset.jobTitle) || "-") + "</span>";
+                }
+            });
+        });
+        return;
+    }
+
+    function getCell(rowIndex, colIndex) {
+        return document.querySelector(
+            '.free-grid-input[data-row-index="' + rowIndex + '"][data-col-index="' + colIndex + '"]'
+        );
+    }
+
+    gridInputs.forEach(function (input) {
+        input.addEventListener("paste", function (event) {
+            const clipboardText = (event.clipboardData || window.clipboardData).getData("text");
+            if (!clipboardText) {
+                return;
+            }
+
+            const rows = clipboardText
+                .replace(/\r/g, "")
+                .split("\n")
+                .filter(function (row) { return row.length > 0; })
+                .map(function (row) { return row.split("\t"); });
+
+            if (rows.length <= 1 && rows[0] && rows[0].length <= 1) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const startRow = parseInt(input.dataset.rowIndex, 10);
+            const startCol = parseInt(input.dataset.colIndex, 10);
+
+            rows.forEach(function (rowValues, rowOffset) {
+                rowValues.forEach(function (value, colOffset) {
+                    const target = getCell(startRow + rowOffset, startCol + colOffset);
+                    if (target) {
+                        target.value = value.trim();
+                        if (target.matches("[data-shift-select]")) {
+                            updateShiftLabel(target);
+                        }
+                    }
+                });
+            });
+        });
+    });
+
+    employeeSelects.forEach(function (select) {
+        select.addEventListener("change", function () {
+            const selectedOption = select.options[select.selectedIndex];
+            const jobTarget = document.getElementById(select.dataset.jobTarget);
+            if (jobTarget) {
+                jobTarget.innerHTML = "<span>" + ((selectedOption && selectedOption.dataset.jobTitle) || "-") + "</span>";
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

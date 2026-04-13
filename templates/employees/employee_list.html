@@ -178,7 +178,7 @@
 
                                 <div class="employee-cell-content">
                                     <div class="employee-cell-name">
-                                        <a href="{% url 'employees:employee_detail' employee.pk %}">
+                                        <a href="{% url 'employees:employee_detail' employee.pk %}?tab=overview">
                                             {{ employee.full_name }}
                                         </a>
                                     </div>
@@ -242,7 +242,7 @@
                         <div class="employee-record-actions">
                             <span class="employee-record-label">Actions</span>
                             <div class="table-action-buttons">
-                                <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-sm btn-light">View</a>
+                                <a href="{% url 'employees:employee_detail' employee.pk %}?tab=overview" class="btn btn-sm btn-light">View</a>
                                 {% if can_edit_employee_records %}
                                     <a href="{% url 'employees:employee_update' employee.pk %}" class="btn btn-sm btn-secondary">Edit</a>
                                 {% endif %}
@@ -257,19 +257,38 @@
 
             {% if is_paginated %}
                 <div class="pagination-wrap">
-                    <div class="pagination">
+                    <div class="pagination employee-directory-pagination">
                         {% if page_obj.has_previous %}
-                            <a href="?page={{ page_obj.previous_page_number }}&search={{ search_value }}&company={{ selected_company }}&department={{ selected_department }}&branch={{ selected_branch }}&section={{ selected_section }}&job_title={{ selected_job_title }}&status={{ selected_status }}" class="btn btn-light btn-sm">
+                            <a href="?page={{ page_obj.previous_page_number }}{% if pagination_querystring %}&{{ pagination_querystring }}{% endif %}" class="btn btn-light btn-sm">
                                 Previous
                             </a>
                         {% endif %}
 
-                        <span class="pagination-info">
-                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                        </span>
+                        <div class="employee-directory-pagination-meta">
+                            <span class="pagination-info">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            </span>
+                            <span class="pagination-info">
+                                Total pages: {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </div>
+
+                        <div class="employee-directory-pagination-numbers">
+                            {% for item in pagination_items %}
+                                {% if item.type == "ellipsis" %}
+                                    <span class="employee-directory-page-ellipsis">...</span>
+                                {% elif item.is_current %}
+                                    <span class="employee-directory-page-number is-active">{{ item.number }}</span>
+                                {% else %}
+                                    <a href="?page={{ item.number }}{% if pagination_querystring %}&{{ pagination_querystring }}{% endif %}" class="employee-directory-page-number">
+                                        {{ item.number }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
 
                         {% if page_obj.has_next %}
-                            <a href="?page={{ page_obj.next_page_number }}&search={{ search_value }}&company={{ selected_company }}&department={{ selected_department }}&branch={{ selected_branch }}&section={{ selected_section }}&job_title={{ selected_job_title }}&status={{ selected_status }}" class="btn btn-light btn-sm">
+                            <a href="?page={{ page_obj.next_page_number }}{% if pagination_querystring %}&{{ pagination_querystring }}{% endif %}" class="btn btn-light btn-sm">
                                 Next
                             </a>
                         {% endif %}

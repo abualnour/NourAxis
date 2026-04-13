@@ -37,6 +37,7 @@ from .views import (
     employee_requests_overview,
     employee_profile_employee_information_update,
     employee_profile_identity_information_update,
+    employee_profile_payroll_information_update,
     employee_status_update,
     get_branches_by_company,
     get_departments_by_company,
@@ -45,6 +46,8 @@ from .views import (
     self_service_documents_page,
     self_service_profile_page,
     self_service_attendance_page,
+    self_service_branch_page,
+    self_service_weekly_schedule_page,
     self_service_leave_page,
     self_service_working_time_page,
 )
@@ -62,6 +65,8 @@ urlpatterns = [
     path("self-service/documents/", self_service_documents_page, name="self_service_documents"),
     path("self-service/attendance/", self_service_attendance_page, name="self_service_attendance"),
     path("self-service/working-time/", self_service_working_time_page, name="self_service_working_time"),
+    path("self-service/branch/", self_service_branch_page, name="self_service_branch"),
+    path("self-service/branch/weekly-schedule/", self_service_weekly_schedule_page, name="self_service_weekly_schedule"),
 
     # Current AJAX endpoints
     path("ajax/departments-by-company/", get_departments_by_company, name="get_departments_by_company"),
@@ -85,6 +90,7 @@ urlpatterns = [
     path("<int:pk>/transfer/", EmployeeTransferView.as_view(), name="employee_transfer"),
     path("<int:pk>/delete/", EmployeeDeleteView.as_view(), name="employee_delete"),
     path("<int:pk>/status/update/", employee_status_update, name="employee_status_update"),
+    path("<int:pk>/profile-section/payroll/update/", employee_profile_payroll_information_update, name="employee_profile_payroll_information_update"),
     path("<int:pk>/profile-section/employee-information/update/", employee_profile_employee_information_update, name="employee_profile_employee_information_update"),
     path("<int:pk>/profile-section/identity-information/update/", employee_profile_identity_information_update, name="employee_profile_identity_information_update"),
     path("<int:pk>/documents/create/", employee_document_create, name="employee_document_create"),

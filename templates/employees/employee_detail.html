@@ -1399,6 +1399,171 @@
                     </div>
                 </div>
 
+                <div class="employee-360-workspace-nav-shell">
+                    <div class="employee-360-workspace-nav" role="tablist" aria-label="Employee 360 sections">
+                        <button type="button" class="employee-360-tab-button is-active" data-tab-trigger="overview" role="tab" aria-selected="true">Overview</button>
+                        <button type="button" class="employee-360-tab-button" data-tab-trigger="payroll" role="tab" aria-selected="false">Payroll</button>
+                        <button type="button" class="employee-360-tab-button" data-tab-trigger="documents" role="tab" aria-selected="false">Documents</button>
+                        <button type="button" class="employee-360-tab-button" data-tab-trigger="leave" role="tab" aria-selected="false">Leave</button>
+                        <button type="button" class="employee-360-tab-button" data-tab-trigger="compliance" role="tab" aria-selected="false">Compliance</button>
+                        <button type="button" class="employee-360-tab-button" data-tab-trigger="performance" role="tab" aria-selected="false">Performance</button>
+                    </div>
+                </div>
+
+                <div class="employee-360-tab-panel is-active" data-tab-panel="overview">
+                <div class="card detail-card modern-soft-card employee-360-card">
+                    <div class="card-header">
+                        <div class="section-heading">
+                            <div>
+                                <h2>Employee 360 Overview</h2>
+                                <p class="page-subtitle">One control layer for analytics, payroll visibility, leave behavior, compliance follow-up, and employee-readiness review.</p>
+                            </div>
+                            <span class="badge badge-light">360 Profile</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="employee-360-overview-grid">
+                            {% for card in employee_360_overview_cards %}
+                                <div class="employee-360-stat-card tone-{{ card.tone }}">
+                                    <span class="employee-360-stat-label">{{ card.label }}</span>
+                                    <strong class="employee-360-stat-value">{{ card.value }}</strong>
+                                    <span class="employee-360-stat-meta">{{ card.meta }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="employee-360-signal-grid">
+                            {% for signal in employee_360_signal_cards %}
+                                <div class="employee-360-signal-card tone-{{ signal.tone }}">
+                                    <div class="employee-360-signal-head">
+                                        <h3>{{ signal.title }}</h3>
+                                        <span class="employee-360-signal-value">{{ signal.value }}</span>
+                                    </div>
+                                    <p>{{ signal.description }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                </div>
+
+                <div class="employee-360-tab-panel" data-tab-panel="leave">
+                    <div class="card detail-card modern-soft-card employee-360-panel">
+                        <div class="card-header">
+                            <div>
+                                <h2>Leave Trends</h2>
+                                <p class="page-subtitle">Approved leave by type, with current pending pressure and request outcomes.</p>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="employee-360-chip-row">
+                                <span class="badge badge-success">Approved Days {{ employee_leave_trends.approved_total }}</span>
+                                <span class="badge badge-warning">Pending Days {{ employee_leave_trends.pending_total }}</span>
+                                <span class="badge badge-light">Rejected {{ employee_leave_trends.rejected_total }}</span>
+                                <span class="badge badge-light">Cancelled {{ employee_leave_trends.cancelled_total }}</span>
+                            </div>
+
+                            <div class="employee-360-mini-table">
+                                {% for row in employee_leave_trends.rows %}
+                                    <div class="employee-360-mini-row">
+                                        <div class="employee-360-mini-main">
+                                            <strong>{{ row.label }}</strong>
+                                            <span>{{ row.approved_days }} day(s)</span>
+                                        </div>
+                                        <div class="employee-360-progress-track">
+                                            <span class="employee-360-progress-fill" style="width: {{ row.share }}%;"></span>
+                                        </div>
+                                        <span class="employee-360-progress-label">{{ row.share }}%</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="employee-360-tab-panel" data-tab-panel="compliance">
+                    <div class="card detail-card modern-soft-card employee-360-panel">
+                        <div class="card-header">
+                            <div>
+                                <h2>Compliance Status</h2>
+                                <p class="page-subtitle">Passport, Civil ID, and identity-readiness cards for fast follow-up.</p>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% if identity_document_statuses %}
+                                <div class="id-status-grid employee-identity-status-grid">
+                                    {% for identity_document in identity_document_statuses %}
+                                        <div class="id-status-card employee-identity-status-card id-status-card-{{ identity_document.state_key }}">
+                                            <div class="id-status-card-head">
+                                                <strong>{{ identity_document.label }}</strong>
+                                                <span class="badge {{ identity_document.badge_class }}">{{ identity_document.status_label }}</span>
+                                            </div>
+                                            <div class="detail-grid two-col">
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Reference Number</span>
+                                                    <span class="detail-value">{{ identity_document.reference_number|default:"â€”" }}</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Expiry Date</span>
+                                                    <span class="detail-value">{% if identity_document.expiry_date %}{{ identity_document.expiry_date|date:"F j, Y" }}{% else %}â€”{% endif %}</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Issue Date</span>
+                                                    <span class="detail-value">{% if identity_document.issue_date %}{{ identity_document.issue_date|date:"F j, Y" }}{% else %}â€”{% endif %}</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Days Remaining</span>
+                                                    <span class="detail-value">{{ identity_document.days_remaining_display }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state compact-empty-state">
+                                    <h3>No identity compliance records</h3>
+                                    <p>Passport and Civil ID status will appear here once details are recorded.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="employee-360-tab-panel" data-tab-panel="compliance">
+                    <div class="card detail-card modern-soft-card employee-360-panel">
+                        <div class="card-header">
+                            <div>
+                                <h2>Compliance &amp; Document Timeline</h2>
+                                <p class="page-subtitle">Identity status, uploaded files, and management compliance requests in one stream.</p>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% if employee_compliance_timeline %}
+                                <div class="employee-360-stream">
+                                    {% for item in employee_compliance_timeline %}
+                                        <div class="employee-360-stream-item tone-{{ item.tone }}">
+                                            <div class="employee-360-stream-meta">
+                                                <strong>{{ item.title }}</strong>
+                                                <span>{{ item.subtitle }}</span>
+                                            </div>
+                                            <div class="employee-360-stream-body">
+                                                <small>{{ item.date_label }}</small>
+                                                <p>{{ item.description }}</p>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state compact-empty-state">
+                                    <h3>No compliance timeline yet</h3>
+                                    <p>Identity dates, submissions, and key employee documents will appear here as the file grows.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="employee-360-tab-panel is-active" data-tab-panel="overview">
                 <div class="card detail-card modern-soft-card employee-information-card" id="employee-information-section">
                     <div class="card-header profile-section-card-header">
                         <h2>Employee &amp; Organization Information</h2>
@@ -1573,8 +1738,10 @@
                         </div>
                     </div>
                 </div>
+                </div>
 
                 {% if can_view_working_time_summary %}
+                <div class="employee-360-tab-panel" data-tab-panel="leave">
                 <div class="card detail-card modern-soft-card">
                     <div class="card-header">
                         <div class="section-heading">
@@ -1709,12 +1876,223 @@
                         </div>
                     </div>
                 </div>
+                </div>
                 {% endif %}
 
+                <div class="employee-360-tab-panel" data-tab-panel="documents">
+                <div class="card detail-card modern-soft-card">
+                    <div class="card-header">
+                        <div class="section-heading">
+                            <div>
+                                <h2>Documents Workspace</h2>
+                                <p class="section-subtitle">Document volume, compliance-sensitive files, and the latest employee file activity.</p>
+                            </div>
+                            <span class="badge badge-light">{{ document_total }} Document{{ document_total|pluralize }}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="employee-360-overview-grid employee-360-documents-stats">
+                            <div class="employee-360-stat-card tone-neutral">
+                                <span class="employee-360-stat-label">All Documents</span>
+                                <strong class="employee-360-stat-value">{{ document_total }}</strong>
+                                <span class="employee-360-stat-meta">All employee file records currently attached.</span>
+                            </div>
+                            <div class="employee-360-stat-card tone-warning">
+                                <span class="employee-360-stat-label">Required Documents</span>
+                                <strong class="employee-360-stat-value">{{ required_document_count }}</strong>
+                                <span class="employee-360-stat-meta">Files marked as required inside the employee file.</span>
+                            </div>
+                            <div class="employee-360-stat-card tone-danger">
+                                <span class="employee-360-stat-label">Expired</span>
+                                <strong class="employee-360-stat-value">{{ expired_document_count }}</strong>
+                                <span class="employee-360-stat-meta">Files already past expiry and needing correction.</span>
+                            </div>
+                            <div class="employee-360-stat-card tone-warning">
+                                <span class="employee-360-stat-label">Expiring Soon</span>
+                                <strong class="employee-360-stat-value">{{ expiring_soon_count }}</strong>
+                                <span class="employee-360-stat-meta">Files approaching expiry and needing early action.</span>
+                            </div>
+                        </div>
 
+                        {% if documents %}
+                            <div class="summary-list modern-list-gap">
+                                {% for document in documents|slice:":8" %}
+                                    <div class="summary-list-item employee-360-timeline-item {% if document.is_expired %}tone-danger{% elif document.is_expiring_soon %}tone-warning{% else %}tone-neutral{% endif %}">
+                                        <div class="employee-360-timeline-topline">
+                                            <strong>{{ document.title|default:document.filename }}</strong>
+                                            <span class="badge badge-light">{{ document.get_document_type_display }}</span>
+                                        </div>
+                                        <small>
+                                            Uploaded {{ document.uploaded_at|date:"F j, Y - g:i A" }}
+                                            {% if document.expiry_date %} • Expiry {{ document.expiry_date|date:"F j, Y" }}{% endif %}
+                                        </small>
+                                        {% if document.description %}
+                                            <div class="document-description">{{ document.description|linebreaksbr }}</div>
+                                        {% endif %}
+                                        {% if document.file %}
+                                            <div class="page-actions document-actions-row" style="margin-top: 12px;">
+                                                <a class="btn btn-light btn-sm" href="{% url 'employees:employee_document_view' employee.pk document.pk %}" target="_blank" rel="noopener">View File</a>
+                                                <a class="btn btn-secondary btn-sm" href="{% url 'employees:employee_document_download' employee.pk document.pk %}">Download</a>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state compact-empty-state">
+                                <h3>No employee documents yet</h3>
+                                <p>Uploaded files, contracts, IDs, payroll files, and other employee records will appear here.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                </div>
+
+
+                <div class="employee-360-tab-panel" data-tab-panel="payroll">
+                <div class="card detail-card modern-soft-card management-workspace-links-card" id="employee-payroll-section">
+                    <div class="card-header">
+                        <div class="section-heading">
+                            <div>
+                                <h2>Payroll Snapshot</h2>
+                                <p class="section-subtitle">Salary setup, payroll readiness, and recent salary lines for this employee.</p>
+                            </div>
+                            {% if can_use_profile_section_edit %}
+                                <button
+                                    type="button"
+                                    class="section-edit-button"
+                                    data-modal-open="payroll-information-modal"
+                                    title="{{ profile_section_actions.payroll_information.title }}"
+                                    aria-label="{{ profile_section_actions.payroll_information.title }}"
+                                >
+                                    <span class="section-edit-button-icon">✎</span>
+                                    <span class="section-edit-button-text">{{ profile_section_actions.payroll_information.label }}</span>
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if employee_payroll_obligations %}
+                            <div class="employee-360-chip-row">
+                                {% for obligation in employee_payroll_obligations %}
+                                    <span class="badge badge-light">
+                                        {{ obligation.title }} | {{ obligation.get_obligation_type_display }} | Remaining {{ obligation.remaining_balance }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <div class="detail-grid two-col employee-org-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Payroll Profile</span>
+                                {% if employee_payroll_profile %}
+                                    <span class="detail-value">
+                                        {{ employee_payroll_profile.get_status_display }}
+                                        {% if employee_payroll_profile.company %} | {{ employee_payroll_profile.company.name }}{% endif %}
+                                    </span>
+                                    <div class="status-badge-stack payroll-snapshot-badges">
+                                        <span class="badge {% if employee_payroll_profile.status == 'active' %}badge-success{% elif employee_payroll_profile.status == 'hold' %}badge-warning{% else %}badge-light{% endif %}">
+                                            {{ employee_payroll_profile.get_status_display }}
+                                        </span>
+                                        {% if employee_estimated_net_salary %}
+                                            <span class="badge badge-light">Estimated Net {{ employee_estimated_net_salary }}</span>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="detail-value">No payroll profile linked yet.</span>
+                                    <div class="status-badge-stack payroll-snapshot-badges">
+                                        <span class="badge badge-warning">Setup Needed</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Base Salary</span>
+                                <span class="detail-value">
+                                    {% if employee_payroll_profile %}
+                                        {{ employee_payroll_profile.base_salary }}
+                                    {% elif employee.salary %}
+                                        {{ employee.salary }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                                <div class="page-actions document-actions-row payroll-snapshot-actions">
+                                    {% if nav_can_view_payroll_workspace %}
+                                        <a class="btn btn-light btn-sm" href="{{ employee_360_payroll_url }}">Open Payroll Workspace</a>
+                                    {% endif %}
+                                    {% if employee_payroll_lines %}
+                                        <span class="badge badge-light">{{ employee_payroll_line_count }} recent payroll run{{ employee_payroll_line_count|pluralize }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Allowances</span>
+                                <span class="detail-value">
+                                    {% if employee_payroll_profile %}
+                                        Housing {{ employee_payroll_profile.housing_allowance }} | Transport {{ employee_payroll_profile.transport_allowance }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Bank Details</span>
+                                <span class="detail-value">
+                                    {% if employee_payroll_profile and employee_payroll_profile.bank_name %}
+                                        {{ employee_payroll_profile.bank_name }}
+                                        {% if employee_payroll_profile.iban %} | {{ employee_payroll_profile.iban }}{% endif %}
+                                    {% elif employee_payroll_profile and employee_payroll_profile.iban %}
+                                        {{ employee_payroll_profile.iban }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if employee_payroll_lines %}
+                            <div class="summary-list payroll-snapshot-list">
+                                {% for payroll_line in employee_payroll_lines %}
+                                    <div class="summary-list-item">
+                                        <strong>{{ payroll_line.payroll_period.title }}</strong>
+                                        <small>
+                                            {{ payroll_line.payroll_period.period_start|date:"M j, Y" }} to {{ payroll_line.payroll_period.period_end|date:"M j, Y" }}
+                                        </small>
+                                        <div class="detail-grid two-col payroll-snapshot-grid">
+                                            <div class="detail-item">
+                                                <span class="detail-label">Base</span>
+                                                <span class="detail-value">{{ payroll_line.base_salary }}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Net</span>
+                                                <span class="detail-value">{{ payroll_line.net_pay }}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Allowances</span>
+                                                <span class="detail-value">{{ payroll_line.allowances }}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Deductions</span>
+                                                <span class="detail-value">{{ payroll_line.deductions }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state compact-empty-state payroll-snapshot-empty">
+                                <h3>No payroll runs yet</h3>
+                                <p>Generated payroll periods for this employee will appear here once the payroll engine creates salary lines.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                </div>
+
+                <div class="employee-360-tab-panel" data-tab-panel="performance">
                 <div class="card detail-card modern-soft-card management-workspace-links-card">
                     <div class="card-header">
-                        <h2>Management Workspaces</h2>
+                        <h2>Performance &amp; Action Workspaces</h2>
                     </div>
                     <div class="card-body">
                         <div class="detail-grid two-col employee-org-grid">
@@ -1722,34 +2100,49 @@
                                 <span class="detail-label">Employee Action Center</span>
                                 <span class="detail-value">Status actions, incident records, required submission requests, and management leave actions now stay in the Action Center workspace.</span>
                                 <div class="page-actions document-actions-row" style="margin-top: 12px;">
-                                    <a class="btn btn-light btn-sm" href="{% url 'employees:employee_admin_action_center' %}?employee={{ employee.pk }}">Open Action Center</a>
+                                    <a class="btn btn-light btn-sm" href="{{ employee_360_performance_url }}">Open Action Center</a>
                                 </div>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Attendance Management</span>
                                 <span class="detail-value">Attendance filtering, ledger entries, correction workflow, and attendance review now stay in Attendance Management.</span>
                                 <div class="page-actions document-actions-row" style="margin-top: 12px;">
-                                    <a class="btn btn-light btn-sm" href="{% url 'employees:attendance_management' %}?employee={{ employee.pk }}">Open Attendance Management</a>
+                                    <a class="btn btn-light btn-sm" href="{{ employee_360_performance_url }}">Open Attendance Management</a>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                </div>
 
+                <div class="employee-360-tab-panel" data-tab-panel="performance">
                 <div class="card detail-card modern-soft-card" id="employee-timeline-section">
                     <div class="card-header timeline-section-header">
                         <div>
-                            <h2>Employee Timeline</h2>
-                            {% if total_history_count %}
+                            <h2>Unified Employee Timeline</h2>
+                            {% if employee_360_timeline_items %}
                                 <p class="timeline-summary-note">
-                                    Page {{ history_page_obj.number }} of {{ history_paginator.num_pages }}. Showing {{ visible_history_count }} of {{ total_history_count }} timeline entr{{ total_history_count|pluralize:"y,ies" }}.
+                                    Cross-module timeline from payroll, leave, documents, compliance, actions, and profile history.
                                 </p>
                             {% endif %}
                         </div>
                     </div>
                     <div class="card-body">
-                        {% if history_entries %}
+                        {% if employee_360_timeline_items %}
                             <div class="summary-list modern-list-gap">
+                                {% for item in employee_360_timeline_items %}
+                                    <div class="summary-list-item employee-360-timeline-item tone-{{ item.tone }}">
+                                        <div class="employee-360-timeline-topline">
+                                            <strong>{{ item.title }}</strong>
+                                            <span class="badge badge-light">{{ item.kind }}</span>
+                                        </div>
+                                        <small>{{ item.date_label }}{% if item.meta %} • {{ item.meta }}{% endif %}</small>
+                                        {% if item.description %}
+                                            <div class="document-description">{{ item.description|linebreaksbr }}</div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                                {% comment %}
                                 {% for entry in history_entries %}
                                     <div class="summary-list-item">
                                         <strong>{{ entry.title }}</strong>
@@ -1762,6 +2155,7 @@
                                         {% endif %}
                                     </div>
                                 {% endfor %}
+                                {% endcomment %}
                             </div>
                         {% else %}
                             <div class="empty-state compact-empty-state">
@@ -1769,7 +2163,7 @@
                                 <p>Profile history, movement updates, and workflow notes will appear here.</p>
                             </div>
                         {% endif %}
-                        {% if history_paginator.num_pages > 1 %}
+                        {% if history_paginator.num_pages > 1 and not employee_360_timeline_items %}
                             <div class="page-actions timeline-pagination-row">
                                 {% if timeline_first_url %}
                                     <a class="btn btn-light btn-sm" href="{{ timeline_first_url }}">First Page</a>
@@ -1784,6 +2178,7 @@
                             </div>
                         {% endif %}
                     </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -1906,6 +2301,88 @@
     </div>
 </div>
 
+<div class="profile-modal-shell{% if active_profile_modal == 'payroll_information' %} is-visible{% endif %}" id="payroll-information-modal" aria-hidden="{% if active_profile_modal == 'payroll_information' %}false{% else %}true{% endif %}">
+    <div class="profile-modal-backdrop" data-modal-close="payroll-information-modal"></div>
+    <div class="profile-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="payroll-information-modal-title">
+        <div class="profile-modal-page">
+            <div class="profile-modal-header">
+                <div>
+                    <span class="profile-modal-eyebrow">Employee Profile Section</span>
+                    <h2 id="payroll-information-modal-title">Edit Payroll Profile</h2>
+                    <p class="page-subtitle">Manage salary structure, payroll status, deductions, and payment details without leaving the employee profile.</p>
+                </div>
+                <button type="button" class="profile-modal-close" data-modal-close="payroll-information-modal" aria-label="Close payroll profile editor">×</button>
+            </div>
+            <form method="post" action="{% url 'employees:employee_profile_payroll_information_update' employee.pk %}" class="profile-modal-form">
+                {% csrf_token %}
+                <div class="profile-modal-body">
+                    {% if employee_payroll_profile_form.non_field_errors %}
+                        <div class="alert alert-danger">{{ employee_payroll_profile_form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="profile-modal-section-card">
+                        <div class="profile-modal-section-head">
+                            <h3>Payroll Structure</h3>
+                        </div>
+                        <div class="profile-modal-grid profile-modal-grid-two">
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.company.id_for_label }}">Payroll Company</label>
+                                {{ employee_payroll_profile_form.company }}
+                                {% if employee_payroll_profile_form.company.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.company.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.status.id_for_label }}">Payroll Status</label>
+                                {{ employee_payroll_profile_form.status }}
+                                {% if employee_payroll_profile_form.status.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.status.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.base_salary.id_for_label }}">Base Salary</label>
+                                {{ employee_payroll_profile_form.base_salary }}
+                                {% if employee_payroll_profile_form.base_salary.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.base_salary.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.fixed_deduction.id_for_label }}">Fixed Deduction</label>
+                                {{ employee_payroll_profile_form.fixed_deduction }}
+                                {% if employee_payroll_profile_form.fixed_deduction.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.fixed_deduction.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.housing_allowance.id_for_label }}">Housing Allowance</label>
+                                {{ employee_payroll_profile_form.housing_allowance }}
+                                {% if employee_payroll_profile_form.housing_allowance.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.housing_allowance.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.transport_allowance.id_for_label }}">Transport Allowance</label>
+                                {{ employee_payroll_profile_form.transport_allowance }}
+                                {% if employee_payroll_profile_form.transport_allowance.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.transport_allowance.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-modal-section-card">
+                        <div class="profile-modal-section-head">
+                            <h3>Payment Details</h3>
+                        </div>
+                        <div class="profile-modal-grid profile-modal-grid-two">
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.bank_name.id_for_label }}">Bank Name</label>
+                                {{ employee_payroll_profile_form.bank_name }}
+                                {% if employee_payroll_profile_form.bank_name.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.bank_name.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ employee_payroll_profile_form.iban.id_for_label }}">IBAN</label>
+                                {{ employee_payroll_profile_form.iban }}
+                                {% if employee_payroll_profile_form.iban.errors %}<div class="invalid-feedback d-block">{{ employee_payroll_profile_form.iban.errors|join:', ' }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="profile-modal-footer">
+                    <button type="button" class="btn btn-light" data-modal-close="payroll-information-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Payroll Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="profile-modal-shell{% if active_profile_modal == 'identity_information' %} is-visible{% endif %}" id="identity-information-modal" aria-hidden="{% if active_profile_modal == 'identity_information' %}false{% else %}true{% endif %}">
     <div class="profile-modal-backdrop" data-modal-close="identity-information-modal"></div>
     <div class="profile-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="identity-information-modal-title">
@@ -1986,6 +2463,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const modalOpenButtons = document.querySelectorAll("[data-modal-open]");
     const modalCloseButtons = document.querySelectorAll("[data-modal-close]");
     const modalShells = document.querySelectorAll(".profile-modal-shell");
+    const tabButtons = document.querySelectorAll("[data-tab-trigger]");
+    const tabPanels = document.querySelectorAll("[data-tab-panel]");
+    const validEmployee360Tabs = new Set(["overview", "payroll", "documents", "leave", "compliance", "performance"]);
 
     function openModal(modalId) {
         const modal = document.getElementById(modalId);
@@ -2021,6 +2501,45 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    function getRequestedEmployee360Tab() {
+        const params = new URLSearchParams(window.location.search);
+        const tabName = (params.get("tab") || "").trim().toLowerCase();
+        return validEmployee360Tabs.has(tabName) ? tabName : "";
+    }
+
+    function syncEmployee360TabQuery(tabName) {
+        if (!tabName || !validEmployee360Tabs.has(tabName)) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", tabName);
+        window.history.replaceState({}, "", url.toString());
+    }
+
+    function activateEmployee360Tab(tabName, options) {
+        const settings = options || {};
+        if (!tabName || !validEmployee360Tabs.has(tabName)) return;
+
+        tabButtons.forEach(function (button) {
+            const isActive = button.getAttribute("data-tab-trigger") === tabName;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+
+        tabPanels.forEach(function (panel) {
+            const isActive = panel.getAttribute("data-tab-panel") === tabName;
+            panel.classList.toggle("is-active", isActive);
+        });
+
+        if (settings.syncUrl !== false) {
+            syncEmployee360TabQuery(tabName);
+        }
+    }
+
+    tabButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            activateEmployee360Tab(button.getAttribute("data-tab-trigger"), { syncUrl: true });
+        });
+    });
+
     document.addEventListener("click", function (event) {
         statusDropdowns.forEach(function (dropdown) {
             if (!dropdown.contains(event.target)) {
@@ -2039,6 +2558,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (document.querySelector(".profile-modal-shell.is-visible")) {
         document.body.classList.add("profile-modal-open");
+    }
+
+    if (tabButtons.length) {
+        const requestedTab = getRequestedEmployee360Tab();
+        const defaultTab = requestedTab || tabButtons[0].getAttribute("data-tab-trigger");
+        activateEmployee360Tab(defaultTab, { syncUrl: Boolean(requestedTab) });
     }
 
     window.addEventListener("pageshow", function () {

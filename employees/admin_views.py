@@ -15,6 +15,7 @@ from .models import Employee, EmployeeAttendanceLedger, EmployeeHistory, Employe
 from .views import (
     build_action_record_summary,
     build_attendance_ledger_summary,
+    build_employee_detail_tab_url,
     build_document_summary,
     build_leave_request_summary,
     can_add_manual_history,
@@ -263,7 +264,11 @@ def employee_admin_action_center(request):
         "action_config": ACTION_FORM_CONFIG[selected_action],
         "action_choices": EmployeeAdminActionCenterFilterForm.ACTION_CHOICES,
         "selected_employee_metrics": build_action_center_metrics(selected_employee),
-        "back_to_employee_url": reverse("employees:employee_detail", kwargs={"pk": selected_employee.pk})
+        "back_to_employee_url": build_employee_detail_tab_url(
+            selected_employee,
+            tab="performance",
+            anchor="employee-timeline-section",
+        )
         if selected_employee
         else None,
     }

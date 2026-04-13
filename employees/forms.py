@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
@@ -8,6 +9,9 @@ from django.utils import timezone
 from organization.models import Branch, Company, Department, JobTitle, Section
 
 from .models import (
+    BranchWeeklyDutyOption,
+    BranchWeeklyScheduleEntry,
+    BranchWeeklyPendingOff,
     Employee,
     EmployeeActionRecord,
     EmployeeAttendanceCorrection,
@@ -1229,6 +1233,167 @@ class EmployeeSelfServiceLeaveRequestForm(EmployeeLeaveForm):
                 "Attachment expiry date cannot be earlier than the attachment issue date.",
             )
 
+        return cleaned_data
+
+
+class BranchWeeklyScheduleEntryForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyScheduleEntry
+        fields = [
+            "employee",
+            "schedule_date",
+            "duty_option",
+            "title",
+            "order_note",
+            "status",
+        ]
+        widgets = {
+            "schedule_date": forms.DateInput(attrs={"type": "date"}),
+            "order_note": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "placeholder": "Add the weekly schedule details, branch orders, or follow-up note for the team member.",
+                }
+            ),
+        }
+
+    def __init__(self, *args, branch=None, week_start=None, **kwargs):
+        self.branch = branch
+        self.week_start = week_start
+        super().__init__(*args, **kwargs)
+
+        if self.branch is not None:
+            self.fields["employee"].queryset = (
+                Employee.objects.select_related("job_title", "section")
+                .filter(branch=self.branch, is_active=True)
+                .order_by("full_name", "employee_id")
+            )
+            self.fields["duty_option"].queryset = (
+                BranchWeeklyDutyOption.objects.filter(branch=self.branch, is_active=True).order_by("display_order", "label")
+            )
+            self.fields["duty_option"].label_from_instance = lambda option: option.preview_label
+        else:
+            self.fields["employee"].queryset = Employee.objects.none()
+            self.fields["duty_option"].queryset = BranchWeeklyDutyOption.objects.none()
+
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "form-check-input"
+            else:
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = f"{existing} form-control".strip()
+
+        self.fields["order_note"].required = False
+        self.fields["title"].required = False
+        self.fields["duty_option"].label = "Duty Option"
+        self.fields["title"].label = "Custom Label"
+        self.fields["order_note"].label = "Orders / Notes"
+        self.fields["title"].widget.attrs.setdefault(
+            "placeholder",
+            "Only needed when using a custom duty label",
+        )
+
+    def clean_title(self):
+        return (self.cleaned_data.get("title") or "").strip()
+
+    def clean_order_note(self):
+        return (self.cleaned_data.get("order_note") or "").strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        employee = cleaned_data.get("employee")
+        schedule_date = cleaned_data.get("schedule_date")
+        duty_option = cleaned_data.get("duty_option")
+        title = cleaned_data.get("title")
+
+        if self.branch is not None and employee and employee.branch_id != self.branch.id:
+            self.add_error("employee", "Selected employee must belong to this branch.")
+
+        if self.week_start and schedule_date:
+            week_end = self.week_start + timedelta(days=6)
+            if schedule_date < self.week_start or schedule_date > week_end:
+                self.add_error(
+                    "schedule_date",
+                    "Schedule date must stay inside the selected branch week.",
+                )
+
+        if not duty_option:
+            self.add_error("duty_option", "Please select a duty option from the list.")
+        elif duty_option.branch_id != self.branch.id:
+            self.add_error("duty_option", "Selected duty option must belong to this branch.")
+
+        if duty_option and duty_option.duty_type == BranchWeeklyScheduleEntry.DUTY_TYPE_CUSTOM and not title:
+            self.add_error("title", "Custom duty needs a short label.")
+
+        return cleaned_data
+
+
+class BranchWeeklyDutyOptionForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyDutyOption
+        fields = [
+            "label",
+            "duty_type",
+            "default_start_time",
+            "default_end_time",
+            "display_order",
+            "is_active",
+        ]
+        widgets = {
+            "default_start_time": forms.TimeInput(attrs={"type": "time"}),
+            "default_end_time": forms.TimeInput(attrs={"type": "time"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "form-check-input"
+            else:
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = f"{existing} form-control".strip()
+        self.fields["label"].widget.attrs.setdefault("placeholder", "Example: 2 pm to 10 pm")
+
+    def clean_label(self):
+        label = (self.cleaned_data.get("label") or "").strip()
+        if not label:
+            raise forms.ValidationError("Duty option label is required.")
+        return label
+
+
+class BranchWeeklyPendingOffForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyPendingOff
+        fields = ["employee", "pending_off_count"]
+
+    def __init__(self, *args, branch=None, **kwargs):
+        self.branch = branch
+        super().__init__(*args, **kwargs)
+        if self.branch is not None:
+            self.fields["employee"].queryset = (
+                Employee.objects.filter(branch=self.branch, is_active=True)
+                .select_related("job_title")
+                .order_by("full_name", "employee_id")
+            )
+        else:
+            self.fields["employee"].queryset = Employee.objects.none()
+
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "form-check-input"
+            else:
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = f"{existing} form-control".strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        employee = cleaned_data.get("employee")
+        if self.branch is not None and employee and employee.branch_id != self.branch.id:
+            self.add_error("employee", "Selected employee must belong to this branch.")
         return cleaned_data
 
 

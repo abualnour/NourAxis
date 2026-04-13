@@ -32,6 +32,12 @@ def navbar_context(request):
             "nav_self_service_profile_url": "",
             "nav_self_service_attendance_url": "",
             "nav_self_service_working_time_url": "",
+            "nav_self_service_branch_url": "",
+            "nav_self_service_weekly_schedule_url": "",
+            "nav_can_view_hr_workspace": False,
+            "nav_can_view_payroll_workspace": False,
+            "nav_hr_workspace_url": "",
+            "nav_payroll_workspace_url": "",
         }
 
     role_value = (getattr(user, "role", "") or "").strip().lower()
@@ -97,22 +103,24 @@ def navbar_context(request):
 
     nav_supervisor_branch_url = ""
     if nav_scoped_branch:
-        nav_supervisor_branch_url = reverse(
-            "organization:branch_detail",
-            kwargs={"pk": nav_scoped_branch.pk},
-        )
+        nav_supervisor_branch_url = reverse("employees:self_service_branch")
 
     nav_self_service_leave_url = ""
     nav_self_service_documents_url = ""
     nav_self_service_profile_url = ""
     nav_self_service_attendance_url = ""
     nav_self_service_working_time_url = ""
+    nav_self_service_branch_url = ""
+    nav_self_service_weekly_schedule_url = ""
     if employee_profile:
         nav_self_service_profile_url = reverse("employees:self_service_profile")
         nav_self_service_leave_url = reverse("employees:self_service_leave")
         nav_self_service_documents_url = reverse("employees:self_service_documents")
         nav_self_service_attendance_url = reverse("employees:self_service_attendance")
         nav_self_service_working_time_url = reverse("employees:self_service_working_time")
+        if getattr(employee_profile, "branch_id", None):
+            nav_self_service_branch_url = reverse("employees:self_service_branch")
+            nav_self_service_weekly_schedule_url = reverse("employees:self_service_weekly_schedule")
 
     return {
         "nav_is_authenticated": True,
@@ -162,4 +170,14 @@ def navbar_context(request):
         "nav_self_service_documents_url": nav_self_service_documents_url,
         "nav_self_service_attendance_url": nav_self_service_attendance_url,
         "nav_self_service_working_time_url": nav_self_service_working_time_url,
+        "nav_self_service_branch_url": nav_self_service_branch_url,
+        "nav_self_service_weekly_schedule_url": nav_self_service_weekly_schedule_url,
+        "nav_can_view_hr_workspace": bool(
+            is_admin_compatible or is_hr_user or is_operations_manager_user or nav_scoped_branch is not None
+        ),
+        "nav_can_view_payroll_workspace": bool(
+            is_admin_compatible or is_hr_user or is_operations_manager_user
+        ),
+        "nav_hr_workspace_url": reverse("hr:home"),
+        "nav_payroll_workspace_url": reverse("payroll:home"),
     }

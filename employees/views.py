@@ -1,10 +1,11 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 import mimetypes
 import re
 from pathlib import Path
 
 from django import forms
+from django.apps import apps
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -21,10 +22,14 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 
 from config.mixins import ProtectedDeleteMixin
 from organization.models import Branch, Company, Department, JobTitle, Section
+from payroll.forms import PayrollProfileForm
 
 from .forms import (
     AttendanceFilterForm,
     AttendanceManagementFilterForm,
+    BranchWeeklyDutyOptionForm,
+    BranchWeeklyPendingOffForm,
+    BranchWeeklyScheduleEntryForm,
     EmployeeActionRecordForm,
     EmployeeAttendanceCorrectionForm,
     EmployeeSelfServiceAttendanceForm,
@@ -42,6 +47,12 @@ from .forms import (
     EmployeeTransferForm,
 )
 from .models import (
+    BranchScheduleGridCell,
+    BranchScheduleGridHeader,
+    BranchScheduleGridRow,
+    BranchWeeklyDutyOption,
+    BranchWeeklyPendingOff,
+    BranchWeeklyScheduleEntry,
     Employee,
     EmployeeActionRecord,
     EmployeeAttendanceCorrection,
@@ -55,7 +66,24 @@ from .models import (
     WORKING_HOURS_PER_DAY,
     WEEKLY_OFF_WEEKDAYS,
     build_employee_working_time_summary,
+    count_policy_working_days,
+    get_schedule_week_start,
 )
+
+FREE_SCHEDULE_GRID_DEFAULT_HEADERS = {
+    0: "Employee",
+    1: "Job Title",
+    2: "Sunday",
+    3: "Monday",
+    4: "Tuesday",
+    5: "Wednesday",
+    6: "Thursday",
+    7: "Friday",
+    8: "Saturday",
+    9: "Notes",
+    10: "Orders",
+    11: "Follow Up",
+}
 
 
 def create_employee_history(
@@ -132,6 +160,8 @@ def build_self_service_page_context(request, employee, *, current_section):
     context["self_service_documents_url"] = reverse("employees:self_service_documents")
     context["self_service_attendance_url"] = reverse("employees:self_service_attendance")
     context["self_service_working_time_url"] = reverse("employees:self_service_working_time")
+    context["self_service_branch_url"] = reverse("employees:self_service_branch")
+    context["self_service_weekly_schedule_url"] = reverse("employees:self_service_weekly_schedule")
     return context
 
 
@@ -557,6 +587,25 @@ def can_view_attendance_management(user):
     return is_admin_compatible(user) or is_hr_user(user) or is_operations_manager_user(user)
 
 
+def can_view_branch_self_service(employee):
+    return bool(employee and employee.branch_id)
+
+
+def can_manage_branch_weekly_schedule(user, branch):
+    if not user or not user.is_authenticated or not branch:
+        return False
+
+    if is_admin_compatible(user) or is_hr_user(user) or is_operations_manager_user(user):
+        return True
+
+    linked_employee = get_user_employee_profile(user)
+    return bool(
+        is_branch_scoped_supervisor(user)
+        and linked_employee
+        and linked_employee.branch_id == branch.id
+    )
+
+
 def can_add_manual_history(user):
     return is_admin_compatible(user) or is_hr_user(user) or is_operations_manager_user(user)
 
@@ -980,7 +1029,7 @@ class EmployeeListView(LoginRequiredMixin, ListView):
     model = Employee
     template_name = "employees/employee_list.html"
     context_object_name = "employees"
-    paginate_by = 20
+    paginate_by = 5
 
     def dispatch(self, request, *args, **kwargs):
         if can_view_employee_directory(request.user):
@@ -1120,6 +1169,39 @@ class EmployeeListView(LoginRequiredMixin, ListView):
         context["can_delete_employee_records"] = can_delete_employee(self.request.user)
         context["is_branch_scoped_supervisor"] = is_branch_scoped_supervisor(self.request.user)
         context["scoped_branch"] = get_user_scope_branch(self.request.user)
+
+        query_params = self.request.GET.copy()
+        query_params.pop("page", None)
+        context["pagination_querystring"] = query_params.urlencode()
+
+        page_obj = context.get("page_obj")
+        if page_obj:
+            paginator = page_obj.paginator
+            current_page = page_obj.number
+            total_pages = paginator.num_pages
+            page_numbers = {1, total_pages}
+
+            for page_number in range(current_page - 1, current_page + 2):
+                if 1 <= page_number <= total_pages:
+                    page_numbers.add(page_number)
+
+            sorted_pages = sorted(page_numbers)
+            pagination_items = []
+            previous_page = None
+
+            for page_number in sorted_pages:
+                if previous_page is not None and page_number - previous_page > 1:
+                    pagination_items.append({"type": "ellipsis"})
+                pagination_items.append(
+                    {
+                        "type": "page",
+                        "number": page_number,
+                        "is_current": page_number == current_page,
+                    }
+                )
+                previous_page = page_number
+
+            context["pagination_items"] = pagination_items
 
         return context
 
@@ -1299,6 +1381,300 @@ def build_branch_team_structure(employee):
         "branch_team_members": branch_team_members,
         "branch_team_groups": grouped,
         "branch_team_total": len(branch_team_members),
+    }
+
+
+FREE_SCHEDULE_GRID_COLUMN_COUNT = 10
+FREE_SCHEDULE_GRID_DAY_THEMES = {
+    1: "sunday",
+    2: "monday",
+    3: "tuesday",
+    4: "wednesday",
+    5: "thursday",
+    6: "friday",
+    7: "saturday",
+    8: "notes",
+    9: "orders",
+    10: "followup",
+}
+FREE_SCHEDULE_SHIFT_OPTIONS = [
+    "",
+    "9 am to 5 pm",
+    "2 pm to 10 pm",
+    "3 pm to 11 pm",
+    "Off",
+    "Extra Off",
+    "Morning",
+    "Evening",
+    "Split Shift",
+]
+
+
+def build_branch_schedule_free_grid(branch):
+    if not branch:
+        return {
+            "free_grid_columns": [],
+            "free_grid_headers": [],
+            "free_grid_rows": [],
+            "free_grid_filled_cells": 0,
+        }
+
+    team_members = list(Employee.objects.select_related("job_title").filter(branch=branch, is_active=True).order_by("full_name", "employee_id"))
+    employee_options = [
+        {
+            "id": member.id,
+            "label": member.full_name,
+            "job_title": getattr(getattr(member, "job_title", None), "name", "") or "",
+        }
+        for member in team_members
+    ]
+    employee_map = {member.id: member for member in team_members}
+    row_total = len(team_members)
+    existing_rows = {
+        row.row_index: row
+        for row in BranchScheduleGridRow.objects.select_related("employee", "employee__job_title").filter(
+            branch=branch,
+            row_index__lte=max(row_total, 1),
+        )
+    }
+    existing_headers = {
+        header.column_index: header.label
+        for header in BranchScheduleGridHeader.objects.filter(branch=branch)
+    }
+    existing_cells = {
+        (cell.row_index, cell.column_index): cell.value
+        for cell in BranchScheduleGridCell.objects.filter(branch=branch, row_index__lte=max(row_total, 1))
+    }
+    columns = [
+        {
+            "index": index,
+            "label": f"Column {index}",
+            "theme": FREE_SCHEDULE_GRID_DAY_THEMES.get(index, "generic"),
+        }
+        for index in range(1, FREE_SCHEDULE_GRID_COLUMN_COUNT + 1)
+    ]
+    free_grid_headers = [
+        {
+            "column_index": 0,
+            "input_name": "header_0",
+            "value": existing_headers.get(0, FREE_SCHEDULE_GRID_DEFAULT_HEADERS[0]),
+            "default_label": FREE_SCHEDULE_GRID_DEFAULT_HEADERS[0],
+        },
+        {
+            "column_index": 1,
+            "input_name": "header_1",
+            "value": existing_headers.get(1, FREE_SCHEDULE_GRID_DEFAULT_HEADERS[1]),
+            "default_label": FREE_SCHEDULE_GRID_DEFAULT_HEADERS[1],
+        },
+    ] + [
+        {
+            "column_index": column["index"] + 1,
+            "input_name": f"header_{column['index'] + 1}",
+            "value": existing_headers.get(
+                column["index"] + 1,
+                FREE_SCHEDULE_GRID_DEFAULT_HEADERS.get(column["index"] + 1, column["label"]),
+            ),
+            "default_label": FREE_SCHEDULE_GRID_DEFAULT_HEADERS.get(column["index"] + 1, column["label"]),
+            "theme": column["theme"],
+        }
+        for column in columns
+    ]
+    roster_day_columns = [column for column in columns if column["theme"] in {
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+    }]
+    roster_extra_columns = [column for column in columns if column["theme"] not in {
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+    }]
+    rows = []
+    filled_cells = 0
+
+    for row_index in range(1, row_total + 1):
+        assigned_row = existing_rows.get(row_index)
+        assigned_employee = getattr(assigned_row, "employee", None)
+        cells = []
+        for column in columns:
+            cell_value = existing_cells.get((row_index, column["index"]), "")
+            if cell_value:
+                filled_cells += 1
+            cells.append(
+                {
+                    "column_index": column["index"],
+                    "value": cell_value,
+                    "input_name": f"grid_{row_index}_{column['index']}",
+                    "row_index": row_index,
+                    "theme": column["theme"],
+                }
+            )
+
+        rows.append(
+            {
+                "row_index": row_index,
+                "employee": assigned_employee,
+                "employee_select_name": f"row_employee_{row_index}",
+                "employee_job_title": getattr(getattr(assigned_employee, "job_title", None), "name", "") or "",
+                "employee_options": employee_options,
+                "cells": cells,
+            }
+        )
+
+    return {
+        "free_grid_columns": columns,
+        "free_grid_headers": free_grid_headers,
+        "free_grid_rows": rows,
+        "free_grid_filled_cells": filled_cells,
+        "free_grid_row_total": row_total,
+        "free_grid_employee_map": employee_map,
+        "roster_day_columns": roster_day_columns,
+        "roster_extra_columns": roster_extra_columns,
+        "free_grid_shift_options": FREE_SCHEDULE_SHIFT_OPTIONS,
+    }
+
+
+def build_schedule_week_days(week_start):
+    if not week_start:
+        return []
+    return [week_start + timedelta(days=index) for index in range(7)]
+
+
+def get_pending_off_days_for_week(employee, week_start, week_end, pending_off_map=None):
+    if not employee or not week_start or not week_end:
+        return 0
+
+    if pending_off_map and employee.id in pending_off_map:
+        return pending_off_map[employee.id]
+
+    pending_leave_records = employee.leave_records.filter(
+        status=EmployeeLeave.STATUS_PENDING,
+        start_date__lte=week_end,
+        end_date__gte=week_start,
+    )
+    total_pending_days = 0
+
+    for leave_record in pending_leave_records:
+        overlap_start = max(week_start, leave_record.start_date)
+        overlap_end = min(week_end, leave_record.end_date)
+        if overlap_start <= overlap_end:
+            total_pending_days += count_policy_working_days(overlap_start, overlap_end)
+
+    return total_pending_days
+
+
+def build_branch_weekly_schedule_summary(branch, week_start):
+    if not branch or not week_start:
+        return {
+            "team_members": [],
+            "team_schedule_rows": [],
+            "schedule_entries": [],
+            "week_days": [],
+            "schedule_total": 0,
+            "completed_total": 0,
+            "in_progress_total": 0,
+            "planned_total": 0,
+            "on_hold_total": 0,
+        }
+
+    week_end = week_start + timedelta(days=6)
+    team_members = list(
+        Employee.objects.select_related("job_title", "section")
+        .filter(branch=branch, is_active=True)
+        .order_by("full_name", "employee_id")
+    )
+    week_days = build_schedule_week_days(week_start)
+    schedule_entries = list(
+        BranchWeeklyScheduleEntry.objects.select_related(
+            "employee",
+            "employee__job_title",
+            "employee__section",
+            "duty_option",
+        )
+        .filter(branch=branch, week_start=week_start)
+        .order_by("schedule_date", "employee__full_name", "id")
+    )
+    pending_off_map = {
+        record.employee_id: record.pending_off_count
+        for record in BranchWeeklyPendingOff.objects.filter(branch=branch, week_start=week_start)
+    }
+
+    entries_by_employee_and_date = {}
+    for entry in schedule_entries:
+        entries_by_employee_and_date[(entry.employee_id, entry.schedule_date)] = entry
+
+    team_schedule_rows = []
+    for member in team_members:
+        row_cells = []
+        member_entries = []
+        for current_date in week_days:
+            current_entry = entries_by_employee_and_date.get((member.id, current_date))
+            row_cells.append(
+                {
+                    "date": current_date,
+                    "entry": current_entry,
+                    "has_entry": current_entry is not None,
+                    "edit_url": f"{reverse('employees:self_service_weekly_schedule')}?week={week_start.isoformat()}&employee={member.id}&day={current_date.isoformat()}",
+                }
+            )
+            if current_entry is not None:
+                member_entries.append(current_entry)
+
+        team_schedule_rows.append(
+            {
+                "employee": member,
+                "entries": member_entries,
+                "cells": row_cells,
+                "entry_total": len(member_entries),
+                "pending_off_total": get_pending_off_days_for_week(
+                    member,
+                    week_start,
+                    week_end,
+                    pending_off_map=pending_off_map,
+                ),
+                "completed_total": sum(
+                    1 for entry in member_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_COMPLETED
+                ),
+                "pending_total": sum(
+                    1
+                    for entry in member_entries
+                    if entry.status in {
+                        BranchWeeklyScheduleEntry.STATUS_PLANNED,
+                        BranchWeeklyScheduleEntry.STATUS_IN_PROGRESS,
+                        BranchWeeklyScheduleEntry.STATUS_ON_HOLD,
+                    }
+                ),
+            }
+        )
+
+    return {
+        "week_start": week_start,
+        "week_end": week_end,
+        "team_members": team_members,
+        "team_schedule_rows": team_schedule_rows,
+        "schedule_entries": schedule_entries,
+        "week_days": week_days,
+        "schedule_total": len(schedule_entries),
+        "completed_total": sum(
+            1 for entry in schedule_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_COMPLETED
+        ),
+        "in_progress_total": sum(
+            1 for entry in schedule_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_IN_PROGRESS
+        ),
+        "planned_total": sum(
+            1 for entry in schedule_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_PLANNED
+        ),
+        "on_hold_total": sum(
+            1 for entry in schedule_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_ON_HOLD
+        ),
     }
 
 
@@ -1541,22 +1917,463 @@ def build_management_document_group_cards(documents, latest_limit=3, expanded_gr
     return ordered_cards
 
 
+def get_summary_value(summary, key, default=None):
+    if summary is None:
+        return default
+    if isinstance(summary, dict):
+        return summary.get(key, default)
+    return getattr(summary, key, default)
+
+
+def build_employee_detail_tab_url(employee, *, tab="overview", modal="", anchor=""):
+    base_url = reverse("employees:employee_detail", kwargs={"pk": employee.pk})
+    query_bits = []
+    if tab:
+        query_bits.append(f"tab={tab}")
+    if modal:
+        query_bits.append(f"modal={modal}")
+    query_string = f"?{'&'.join(query_bits)}" if query_bits else ""
+    anchor_string = f"#{anchor}" if anchor else ""
+    return f"{base_url}{query_string}{anchor_string}"
+
+
+def build_employee_360_overview_cards(
+    employee,
+    attendance_summary,
+    working_time_summary,
+    identity_document_statuses,
+    leave_records,
+    required_submission_requests,
+    employee_document_requests,
+    payroll_profile,
+    payroll_lines,
+    payroll_obligations,
+    action_records,
+):
+    today = timezone.localdate()
+    attendance_total = attendance_summary.get("attendance_total") or 0
+    present_total = attendance_summary.get("present_attendance_count") or 0
+    attendance_rate = int(round((present_total / attendance_total) * 100)) if attendance_total else 0
+    compliance_alert_total = sum(
+        1 for status in identity_document_statuses if status["state_key"] in {"expired", "expiring_soon", "missing"}
+    )
+    overdue_submission_total = sum(1 for item in required_submission_requests if item.is_overdue)
+    open_action_total = sum(
+        1 for action_record in action_records if action_record.status in {EmployeeActionRecord.STATUS_OPEN, EmployeeActionRecord.STATUS_UNDER_REVIEW}
+    )
+    active_obligations = [
+        obligation for obligation in payroll_obligations if obligation.status == obligation.STATUS_ACTIVE
+    ]
+    outstanding_obligation_balance = sum(
+        (obligation.remaining_balance or Decimal("0.00")) for obligation in active_obligations
+    )
+    approved_leave_days_year = sum(
+        leave_record.total_days
+        for leave_record in leave_records
+        if leave_record.status == EmployeeLeave.STATUS_APPROVED
+        and (
+            leave_record.start_date.year == today.year
+            or leave_record.end_date.year == today.year
+        )
+    )
+    pending_requests_total = sum(
+        1
+        for item in employee_document_requests
+        if item.status in {EmployeeDocumentRequest.STATUS_REQUESTED, EmployeeDocumentRequest.STATUS_APPROVED}
+    )
+
+    return [
+        {
+            "label": "Service Duration",
+            "value": get_summary_value(working_time_summary, "service_duration_display") or "Not set",
+            "meta": f"Hired {employee.hire_date:%b %d, %Y}" if employee.hire_date else "Hire date not recorded",
+            "tone": "neutral",
+        },
+        {
+            "label": "Attendance Reliability",
+            "value": f"{attendance_rate}%",
+            "meta": f"{present_total} present day(s) across {attendance_total} attendance record(s)",
+            "tone": "good" if attendance_rate >= 90 else "warning" if attendance_rate >= 75 else "danger",
+        },
+        {
+            "label": "Compliance Alerts",
+            "value": str(compliance_alert_total + overdue_submission_total),
+            "meta": f"{compliance_alert_total} ID alert(s), {overdue_submission_total} overdue submission(s)",
+            "tone": "good" if (compliance_alert_total + overdue_submission_total) == 0 else "danger",
+        },
+        {
+            "label": "Payroll Status",
+            "value": payroll_profile.get_status_display() if payroll_profile else "Setup Needed",
+            "meta": (
+                f"Latest net pay {payroll_lines[0].net_pay}" if payroll_lines else
+                f"Estimated net {payroll_profile.estimated_net_salary}" if payroll_profile else
+                "No payroll lines generated yet"
+            ),
+            "tone": "good" if payroll_profile and payroll_profile.status == payroll_profile.STATUS_ACTIVE else "warning",
+        },
+        {
+            "label": "Leave This Year",
+            "value": str(approved_leave_days_year),
+            "meta": f"{sum(1 for item in leave_records if item.status == EmployeeLeave.STATUS_PENDING)} pending request(s) now",
+            "tone": "neutral",
+        },
+        {
+            "label": "Open Workforce Items",
+            "value": str(open_action_total + pending_requests_total),
+            "meta": f"{open_action_total} action item(s), {pending_requests_total} document request(s)",
+            "tone": "warning" if (open_action_total + pending_requests_total) else "good",
+        },
+        {
+            "label": "Active Deductions",
+            "value": str(len(active_obligations)),
+            "meta": f"Outstanding balance {outstanding_obligation_balance}",
+            "tone": "warning" if active_obligations else "neutral",
+        },
+        {
+            "label": "Available Annual Leave",
+            "value": str(get_summary_value(working_time_summary, "annual_leave_available_after_planning_days", 0) or 0),
+            "meta": "Balance after taken and future approved leave",
+            "tone": "good",
+        },
+    ]
+
+
+def build_employee_360_signal_cards(
+    attendance_summary,
+    working_time_summary,
+    identity_document_statuses,
+    leave_records,
+    payroll_profile,
+    payroll_lines,
+    payroll_obligations,
+):
+    attendance_total = attendance_summary.get("attendance_total") or 0
+    present_total = attendance_summary.get("present_attendance_count") or 0
+    absence_total = attendance_summary.get("absence_attendance_count") or 0
+    attendance_rate = int(round((present_total / attendance_total) * 100)) if attendance_total else 0
+    compliance_attention = [
+        status for status in identity_document_statuses if status["state_key"] in {"expired", "expiring_soon", "missing"}
+    ]
+    latest_payroll_line = payroll_lines[0] if payroll_lines else None
+    active_obligations = [
+        obligation for obligation in payroll_obligations if obligation.status == obligation.STATUS_ACTIVE
+    ]
+    leave_mix = {
+        "annual": get_summary_value(working_time_summary, "annual_leave_days", 0) or 0,
+        "sick": get_summary_value(working_time_summary, "sick_leave_days", 0) or 0,
+        "unpaid": get_summary_value(working_time_summary, "unpaid_leave_days", 0) or 0,
+        "emergency": get_summary_value(working_time_summary, "emergency_leave_days", 0) or 0,
+        "other": get_summary_value(working_time_summary, "other_leave_days", 0) or 0,
+    }
+    dominant_leave_key = max(leave_mix, key=leave_mix.get) if any(leave_mix.values()) else ""
+    dominant_leave_label_map = {
+        "annual": "Annual leave",
+        "sick": "Sick leave",
+        "unpaid": "Unpaid leave",
+        "emergency": "Emergency leave",
+        "other": "Other leave",
+    }
+
+    return [
+        {
+            "title": "Attendance Signal",
+            "value": f"{attendance_rate}%",
+            "description": (
+                f"{present_total} present day(s), {absence_total} absence day(s), "
+                f"{attendance_summary.get('total_late_minutes') or 0} late minute(s)."
+            ),
+            "tone": "good" if attendance_rate >= 90 else "warning" if attendance_rate >= 75 else "danger",
+        },
+        {
+            "title": "Leave Trend",
+            "value": str(get_summary_value(working_time_summary, "approved_leave_days", 0) or 0),
+            "description": (
+                f"Approved leave days total. Strongest pattern: "
+                f"{dominant_leave_label_map.get(dominant_leave_key, 'No dominant leave pattern yet')}."
+            ),
+            "tone": "neutral",
+        },
+        {
+            "title": "Compliance Readiness",
+            "value": str(len(compliance_attention)),
+            "description": (
+                "Passport, Civil ID, and requested submissions are under control."
+                if not compliance_attention
+                else f"{len(compliance_attention)} identity/compliance alert(s) need follow-up."
+            ),
+            "tone": "good" if not compliance_attention else "danger",
+        },
+        {
+            "title": "Payroll Stability",
+            "value": payroll_profile.get_status_display() if payroll_profile else "Pending",
+            "description": (
+                f"Latest net pay {latest_payroll_line.net_pay}. {len(active_obligations)} active obligation(s)."
+                if latest_payroll_line
+                else "Payroll profile is visible, but no payroll line has been generated yet."
+                if payroll_profile
+                else "Payroll profile setup has not been completed yet."
+            ),
+            "tone": "good" if payroll_profile and payroll_profile.status == payroll_profile.STATUS_ACTIVE else "warning",
+        },
+    ]
+
+
+def build_employee_leave_trend_rows(leave_records):
+    leave_type_totals = {
+        EmployeeLeave.LEAVE_TYPE_ANNUAL: 0,
+        EmployeeLeave.LEAVE_TYPE_SICK: 0,
+        EmployeeLeave.LEAVE_TYPE_UNPAID: 0,
+        EmployeeLeave.LEAVE_TYPE_EMERGENCY: 0,
+        EmployeeLeave.LEAVE_TYPE_OTHER: 0,
+    }
+    leave_type_labels = dict(EmployeeLeave.LEAVE_TYPE_CHOICES)
+
+    approved_total = 0
+    pending_total = 0
+    rejected_total = 0
+    cancelled_total = 0
+
+    for leave_record in leave_records:
+        if leave_record.status == EmployeeLeave.STATUS_APPROVED:
+            approved_total += leave_record.total_days
+            leave_type_totals[leave_record.leave_type] = leave_type_totals.get(leave_record.leave_type, 0) + leave_record.total_days
+        elif leave_record.status == EmployeeLeave.STATUS_PENDING:
+            pending_total += leave_record.total_days
+        elif leave_record.status == EmployeeLeave.STATUS_REJECTED:
+            rejected_total += 1
+        elif leave_record.status == EmployeeLeave.STATUS_CANCELLED:
+            cancelled_total += 1
+
+    rows = []
+    for leave_type, total_days in leave_type_totals.items():
+        rows.append(
+            {
+                "label": leave_type_labels.get(leave_type, leave_type.title()),
+                "approved_days": total_days,
+                "share": int(round((total_days / approved_total) * 100)) if approved_total else 0,
+            }
+        )
+
+    return {
+        "rows": rows,
+        "approved_total": approved_total,
+        "pending_total": pending_total,
+        "rejected_total": rejected_total,
+        "cancelled_total": cancelled_total,
+    }
+
+
+def build_employee_compliance_timeline(identity_document_statuses, documents, required_submission_requests):
+    items = []
+
+    for status in identity_document_statuses:
+        items.append(
+            {
+                "title": status["label"],
+                "subtitle": status["status_label"],
+                "date": status["expiry_date"] or status["issue_date"],
+                "date_label": (
+                    f"Expiry {status['expiry_date']:%b %d, %Y}" if status["expiry_date"] else
+                    f"Issued {status['issue_date']:%b %d, %Y}" if status["issue_date"] else
+                    "No date recorded"
+                ),
+                "description": (
+                    f"Reference {status['reference_number']}. {status['days_remaining_display']}"
+                    if status["reference_number"] else status["days_remaining_display"]
+                ),
+                "tone": "good" if status["state_key"] == "valid" else "warning" if status["state_key"] == "expiring_soon" else "danger",
+            }
+        )
+
+    for document in documents[:6]:
+        items.append(
+            {
+                "title": document.title or document.filename,
+                "subtitle": document.get_document_type_display(),
+                "date": timezone.localtime(document.uploaded_at).date() if document.uploaded_at else None,
+                "date_label": (
+                    f"Uploaded {timezone.localtime(document.uploaded_at):%b %d, %Y}"
+                    if document.uploaded_at else "Upload date unavailable"
+                ),
+                "description": document.description or "Document uploaded to employee file.",
+                "tone": "danger" if document.is_expired else "warning" if document.is_expiring_soon else "neutral",
+            }
+        )
+
+    for request_item in required_submission_requests[:6]:
+        items.append(
+            {
+                "title": request_item.title,
+                "subtitle": request_item.get_status_display(),
+                "date": (
+                    request_item.due_date
+                    or (request_item.submitted_at.date() if request_item.submitted_at else timezone.localtime(request_item.created_at).date())
+                ),
+                "date_label": (
+                    f"Due {request_item.due_date:%b %d, %Y}" if request_item.due_date else
+                    f"Updated {timezone.localtime(request_item.updated_at):%b %d, %Y}"
+                ),
+                "description": request_item.instructions or "Compliance or file request raised from management workflow.",
+                "tone": "danger" if request_item.is_overdue else "warning" if request_item.status != request_item.STATUS_COMPLETED else "good",
+            }
+        )
+
+    items.sort(key=lambda item: item["date"] or date.min, reverse=True)
+    return items[:10]
+
+
+def build_employee_360_timeline_items(
+    history_entries,
+    leave_records,
+    action_records,
+    documents,
+    employee_document_requests,
+    required_submission_requests,
+    payroll_lines,
+):
+    items = []
+
+    for entry in history_entries:
+        items.append(
+            {
+                "kind": "History",
+                "title": entry.title,
+                "date": entry.event_date or timezone.localtime(entry.created_at).date(),
+                "date_label": (
+                    f"{entry.event_date:%b %d, %Y}" if entry.event_date else f"{timezone.localtime(entry.created_at):%b %d, %Y}"
+                ),
+                "description": entry.description or "Profile event recorded in employee history.",
+                "meta": entry.created_by or "System",
+                "tone": "neutral",
+            }
+        )
+
+    for leave_record in leave_records[:8]:
+        items.append(
+            {
+                "kind": "Leave",
+                "title": leave_record.get_leave_type_display(),
+                "date": leave_record.start_date,
+                "date_label": f"{leave_record.start_date:%b %d, %Y} to {leave_record.end_date:%b %d, %Y}",
+                "description": leave_record.reason or f"{leave_record.total_days} day(s), status {leave_record.get_status_display().lower()}.",
+                "meta": leave_record.get_status_display(),
+                "tone": "good" if leave_record.status == leave_record.STATUS_APPROVED else "warning" if leave_record.status == leave_record.STATUS_PENDING else "danger",
+            }
+        )
+
+    for action_record in action_records[:8]:
+        items.append(
+            {
+                "kind": "Action",
+                "title": action_record.title,
+                "date": action_record.action_date,
+                "date_label": f"{action_record.action_date:%b %d, %Y}",
+                "description": action_record.description or action_record.get_action_type_display(),
+                "meta": f"{action_record.get_status_display()} • {action_record.get_severity_display()}",
+                "tone": "danger" if action_record.severity == action_record.SEVERITY_CRITICAL else "warning",
+            }
+        )
+
+    for document in documents[:8]:
+        items.append(
+            {
+                "kind": "Document",
+                "title": document.title or document.filename,
+                "date": timezone.localtime(document.uploaded_at).date() if document.uploaded_at else None,
+                "date_label": f"{timezone.localtime(document.uploaded_at):%b %d, %Y}" if document.uploaded_at else "No upload date",
+                "description": document.description or document.get_document_type_display(),
+                "meta": document.get_document_type_display(),
+                "tone": "danger" if document.is_expired else "warning" if document.is_expiring_soon else "neutral",
+            }
+        )
+
+    for payroll_line in payroll_lines[:6]:
+        period = payroll_line.payroll_period
+        items.append(
+            {
+                "kind": "Payroll",
+                "title": period.title,
+                "date": period.pay_date or period.period_end or period.period_start,
+                "date_label": (
+                    f"Pay date {period.pay_date:%b %d, %Y}" if period.pay_date else
+                    f"Period {period.period_start:%b %d, %Y} to {period.period_end:%b %d, %Y}"
+                ),
+                "description": f"Net pay {payroll_line.net_pay} from base {payroll_line.base_salary}.",
+                "meta": period.get_status_display(),
+                "tone": "good" if period.status == period.STATUS_PAID else "warning",
+            }
+        )
+
+    for document_request in employee_document_requests[:6]:
+        request_date = document_request.submitted_at.date() if document_request.submitted_at else timezone.localtime(document_request.created_at).date()
+        items.append(
+            {
+                "kind": "Request",
+                "title": document_request.title,
+                "date": request_date,
+                "date_label": f"{request_date:%b %d, %Y}",
+                "description": document_request.request_note or document_request.get_request_type_display(),
+                "meta": document_request.get_status_display(),
+                "tone": "good" if document_request.status == document_request.STATUS_COMPLETED else "warning" if document_request.status in {document_request.STATUS_REQUESTED, document_request.STATUS_APPROVED} else "danger",
+            }
+        )
+
+    for submission_request in required_submission_requests[:6]:
+        items.append(
+            {
+                "kind": "Compliance",
+                "title": submission_request.title,
+                "date": submission_request.due_date or timezone.localtime(submission_request.created_at).date(),
+                "date_label": (
+                    f"Due {submission_request.due_date:%b %d, %Y}" if submission_request.due_date else
+                    f"Created {timezone.localtime(submission_request.created_at):%b %d, %Y}"
+                ),
+                "description": submission_request.instructions or submission_request.get_request_type_display(),
+                "meta": submission_request.get_status_display(),
+                "tone": "danger" if submission_request.is_overdue else "warning" if submission_request.status != submission_request.STATUS_COMPLETED else "good",
+            }
+        )
+
+    items.sort(key=lambda item: item["date"] or date.min, reverse=True)
+    return items[:18]
+
+
 def build_employee_profile_section_actions(employee):
-    detail_url = reverse("employees:employee_detail", kwargs={"pk": employee.pk})
     transfer_url = reverse("employees:employee_transfer", kwargs={"pk": employee.pk})
 
     return {
         "employee_information": {
             "label": "Edit section",
-            "url": f"{detail_url}?modal=employee_information#employee-information-section",
+            "url": build_employee_detail_tab_url(
+                employee,
+                tab="overview",
+                modal="employee_information",
+                anchor="employee-information-section",
+            ),
             "title": "Edit employee information",
             "modal_target": "employee-information-modal",
         },
         "identity_information": {
             "label": "Edit section",
-            "url": f"{detail_url}?modal=identity_information#employee-information-section",
+            "url": build_employee_detail_tab_url(
+                employee,
+                tab="compliance",
+                modal="identity_information",
+                anchor="employee-information-section",
+            ),
             "title": "Edit passport and civil ID details",
             "modal_target": "identity-information-modal",
+        },
+        "payroll_information": {
+            "label": "Edit payroll",
+            "url": build_employee_detail_tab_url(
+                employee,
+                tab="payroll",
+                modal="payroll_information",
+                anchor="employee-payroll-section",
+            ),
+            "title": "Edit payroll profile and salary settings",
+            "modal_target": "payroll-information-modal",
         },
         "organization_information": {
             "label": "Edit section",
@@ -1982,6 +2799,84 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
         context["can_create_employee_document_request"] = can_create_employee_document_request(current_user, employee)
         context["can_cancel_employee_document_request"] = True
 
+        PayrollProfile = apps.get_model("payroll", "PayrollProfile")
+        PayrollLine = apps.get_model("payroll", "PayrollLine")
+        PayrollObligation = apps.get_model("payroll", "PayrollObligation")
+        payroll_profile = PayrollProfile.objects.select_related("company").filter(employee=employee).first()
+        latest_payroll_lines = list(
+            PayrollLine.objects.select_related("payroll_period")
+            .filter(employee=employee)
+            .order_by("-payroll_period__period_start", "-id")[:5]
+        )
+        payroll_obligations = list(
+            PayrollObligation.objects.filter(employee=employee).order_by("-created_at", "-id")[:8]
+        )
+        employee_360_overview_cards = build_employee_360_overview_cards(
+            employee,
+            attendance_summary,
+            working_time_summary,
+            identity_document_statuses,
+            leave_records,
+            required_submission_requests,
+            employee_document_requests,
+            payroll_profile,
+            latest_payroll_lines,
+            payroll_obligations,
+            action_records,
+        )
+        employee_360_signal_cards = build_employee_360_signal_cards(
+            attendance_summary,
+            working_time_summary,
+            identity_document_statuses,
+            leave_records,
+            payroll_profile,
+            latest_payroll_lines,
+            payroll_obligations,
+        )
+        employee_leave_trends = build_employee_leave_trend_rows(leave_records)
+        employee_compliance_timeline = build_employee_compliance_timeline(
+            identity_document_statuses,
+            all_documents,
+            required_submission_requests,
+        )
+        employee_360_timeline_items = build_employee_360_timeline_items(
+            history_entries,
+            leave_records,
+            action_records,
+            all_documents,
+            employee_document_requests,
+            required_submission_requests,
+            latest_payroll_lines,
+        )
+        context["employee_payroll_profile"] = payroll_profile
+        context["employee_payroll_lines"] = latest_payroll_lines
+        context["employee_payroll_line_count"] = len(latest_payroll_lines)
+        context["employee_payroll_obligations"] = payroll_obligations
+        context["employee_estimated_net_salary"] = payroll_profile.estimated_net_salary if payroll_profile else None
+        context["employee_360_overview_url"] = build_employee_detail_tab_url(employee, tab="overview")
+        context["employee_360_payroll_url"] = build_employee_detail_tab_url(
+            employee,
+            tab="payroll",
+            anchor="employee-payroll-section",
+        )
+        context["employee_360_documents_url"] = build_employee_detail_tab_url(employee, tab="documents")
+        context["employee_360_leave_url"] = build_employee_detail_tab_url(employee, tab="leave")
+        context["employee_360_compliance_url"] = build_employee_detail_tab_url(employee, tab="compliance")
+        context["employee_360_performance_url"] = build_employee_detail_tab_url(
+            employee,
+            tab="performance",
+            anchor="employee-timeline-section",
+        )
+        context["employee_360_overview_cards"] = employee_360_overview_cards
+        context["employee_360_signal_cards"] = employee_360_signal_cards
+        context["employee_leave_trends"] = employee_leave_trends
+        context["employee_compliance_timeline"] = employee_compliance_timeline
+        context["employee_360_timeline_items"] = employee_360_timeline_items
+        context["employee_payroll_profile_form"] = kwargs.get("employee_payroll_profile_form") or PayrollProfileForm(
+            instance=payroll_profile,
+            employee=employee,
+        )
+
         return context
 
 
@@ -2063,6 +2958,164 @@ def self_service_working_time_page(request):
         current_section="working_time",
     )
     return render(request, "employees/self_service_working_time.html", context)
+
+
+@login_required
+def self_service_branch_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+    if not can_view_branch_self_service(employee):
+        messages.error(request, "This employee is not linked to any branch yet.")
+        return redirect("employees:self_service_profile")
+
+    week_value = (request.GET.get("week") or "").strip()
+    selected_week_start = get_schedule_week_start(timezone.localdate())
+    if week_value:
+        try:
+            selected_week_start = get_schedule_week_start(date.fromisoformat(week_value))
+        except ValueError:
+            messages.warning(request, "Invalid week selected. Showing the current branch week instead.")
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="branch",
+    )
+    context.update(build_branch_team_structure(employee))
+    context.update(build_branch_weekly_schedule_summary(employee.branch, selected_week_start))
+    context["branch"] = employee.branch
+    context["selected_week_start"] = selected_week_start
+    context["can_manage_branch_weekly_schedule"] = can_manage_branch_weekly_schedule(request.user, employee.branch)
+    return render(request, "employees/self_service_branch.html", context)
+
+
+@login_required
+def self_service_weekly_schedule_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+    if not can_view_branch_self_service(employee):
+        messages.error(request, "This employee is not linked to any branch yet.")
+        return redirect("employees:self_service_profile")
+
+    week_value = (request.GET.get("week") or "").strip()
+    selected_week_start = get_schedule_week_start(timezone.localdate())
+    if week_value:
+        try:
+            selected_week_start = get_schedule_week_start(date.fromisoformat(week_value))
+        except ValueError:
+            messages.warning(request, "Invalid week selected. Showing the current branch week instead.")
+
+    branch = employee.branch
+    can_manage_schedule = can_manage_branch_weekly_schedule(request.user, branch)
+    edit_entry = None
+    option_edit = None
+    selected_edit_employee = None
+    selected_edit_day = None
+
+    if request.method == "POST" and can_manage_schedule:
+        action = (request.POST.get("schedule_action") or "").strip()
+
+        if action == "save_free_grid":
+            team_members = list(Employee.objects.filter(branch=branch, is_active=True).order_by("full_name", "employee_id"))
+            employee_map = {member.id: member for member in team_members}
+            row_total = len(team_members)
+            existing_rows = {
+                row.row_index: row
+                for row in BranchScheduleGridRow.objects.filter(branch=branch, row_index__lte=max(row_total, 1))
+            }
+            existing_headers = {
+                header.column_index: header
+                for header in BranchScheduleGridHeader.objects.filter(branch=branch)
+            }
+            existing_cells = {
+                (cell.row_index, cell.column_index): cell
+                for cell in BranchScheduleGridCell.objects.filter(branch=branch, row_index__lte=max(row_total, 1))
+            }
+
+            for header_index in range(0, 12):
+                header_value = (request.POST.get(f"header_{header_index}") or "").strip()
+                existing_header = existing_headers.get(header_index)
+                if header_value:
+                    if existing_header:
+                        existing_header.label = header_value
+                        existing_header.save(update_fields=["label", "updated_at"])
+                    else:
+                        BranchScheduleGridHeader.objects.create(
+                            branch=branch,
+                            column_index=header_index,
+                            label=header_value,
+                        )
+                elif existing_header:
+                    existing_header.delete()
+
+            for row_index in range(1, row_total + 1):
+                selected_employee_id = (request.POST.get(f"row_employee_{row_index}") or "").strip()
+                selected_employee = employee_map.get(int(selected_employee_id)) if selected_employee_id.isdigit() and int(selected_employee_id) in employee_map else None
+                existing_row = existing_rows.get(row_index)
+
+                if existing_row:
+                    existing_row.employee = selected_employee
+                    existing_row.save(update_fields=["employee", "updated_at"])
+                else:
+                    BranchScheduleGridRow.objects.create(
+                        branch=branch,
+                        row_index=row_index,
+                        employee=selected_employee,
+                    )
+
+                for column_index in range(1, FREE_SCHEDULE_GRID_COLUMN_COUNT + 1):
+                    input_name = f"grid_{row_index}_{column_index}"
+                    submitted_value = (request.POST.get(input_name) or "").strip()
+                    existing_cell = existing_cells.get((row_index, column_index))
+
+                    if submitted_value:
+                        if existing_cell:
+                            if existing_cell.value != submitted_value:
+                                existing_cell.value = submitted_value
+                                existing_cell.save(update_fields=["value", "updated_at"])
+                        else:
+                            BranchScheduleGridCell.objects.create(
+                                branch=branch,
+                                row_index=row_index,
+                                column_index=column_index,
+                                value=submitted_value,
+                            )
+                    elif existing_cell:
+                        existing_cell.delete()
+
+            messages.success(request, "Spreadsheet grid saved successfully.")
+            return redirect("employees:self_service_weekly_schedule")
+
+    previous_week_start = selected_week_start - timedelta(days=7)
+    next_week_start = selected_week_start + timedelta(days=7)
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="weekly_schedule",
+    )
+    context.update(build_branch_weekly_schedule_summary(branch, selected_week_start))
+    context["branch"] = branch
+    context["selected_week_start"] = selected_week_start
+    context["previous_week_start"] = previous_week_start
+    context["next_week_start"] = next_week_start
+    context["can_manage_branch_weekly_schedule"] = can_manage_schedule
+    context.update(build_branch_schedule_free_grid(branch))
+    return render(request, "employees/self_service_weekly_schedule.html", context)
 
 
 @login_required
@@ -3889,6 +4942,30 @@ class EmployeeIdentityModalForm(ActionCenterEmployeeProfileForm):
         ]
 
 
+def build_employee_payroll_modal_summary(old_profile, new_profile):
+    changes = []
+    tracked_fields = [
+        ("company", "Payroll company"),
+        ("base_salary", "Base salary"),
+        ("housing_allowance", "Housing allowance"),
+        ("transport_allowance", "Transport allowance"),
+        ("fixed_deduction", "Fixed deduction"),
+        ("bank_name", "Bank name"),
+        ("iban", "IBAN"),
+        ("status", "Payroll status"),
+    ]
+
+    for field_name, label in tracked_fields:
+        old_value = getattr(old_profile, field_name, None) if old_profile else None
+        new_value = getattr(new_profile, field_name, None)
+        if old_value != new_value:
+            changes.append(
+                f"{label} changed from {format_history_value(old_value)} to {format_history_value(new_value)}."
+            )
+
+    return " ".join(changes) if changes else "Payroll profile details were updated from the employee profile."
+
+
 def build_employee_information_modal_summary(old_employee, new_employee):
     changes = []
     tracked_fields = [
@@ -3947,6 +5024,50 @@ def render_employee_detail_with_modal_forms(request, employee, **kwargs):
     context = detail_view.get_context_data(**kwargs)
     return render(request, detail_view.template_name, context)
 
+
+
+@login_required
+@require_POST
+def employee_profile_payroll_information_update(request, pk):
+    employee = get_object_or_404(Employee, pk=pk)
+
+    if not can_create_or_edit_employees(request.user):
+        return deny_employee_access(
+            request,
+            "You do not have permission to edit payroll details for this employee.",
+            employee=employee,
+        )
+
+    PayrollProfile = apps.get_model("payroll", "PayrollProfile")
+    existing_profile = PayrollProfile.objects.filter(employee=employee).first()
+    original_snapshot = PayrollProfile.objects.get(pk=existing_profile.pk) if existing_profile else None
+    form = PayrollProfileForm(request.POST, instance=existing_profile, employee=employee)
+
+    if form.is_valid():
+        payroll_profile = form.save(commit=False)
+        payroll_profile.employee = employee
+        if not payroll_profile.company_id and employee.company_id:
+            payroll_profile.company_id = employee.company_id
+        payroll_profile.save()
+        create_employee_history(
+            employee=employee,
+            title="Payroll profile updated",
+            description=build_employee_payroll_modal_summary(original_snapshot, payroll_profile),
+            event_type=EmployeeHistory.EVENT_PROFILE,
+            created_by=get_actor_label(request.user),
+            is_system_generated=True,
+            event_date=timezone.localdate(),
+        )
+        messages.success(request, "Payroll profile updated successfully.")
+        return redirect(f"{reverse('employees:employee_detail', kwargs={'pk': employee.pk})}#employee-payroll-section")
+
+    messages.error(request, "Please correct the payroll profile fields and try again.")
+    return render_employee_detail_with_modal_forms(
+        request,
+        employee,
+        employee_payroll_profile_form=form,
+        active_profile_modal="payroll_information",
+    )
 
 
 @login_required

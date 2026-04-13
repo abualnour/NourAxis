@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Payroll Workspace{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/platform.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="platform-page">
+    <section class="platform-hero payroll-hero">
+        <div class="platform-hero-copy">
+            <span class="platform-kicker">Payroll Workspace</span>
+            <h1>Payroll structure, pay periods, and salary readiness in one place</h1>
+            <p>Build payroll operations directly inside the system with employee payroll profiles, pay periods, line items, and a clearer monthly pay workflow.</p>
+        </div>
+        <div class="platform-hero-side">
+            <div class="platform-side-card">
+                <span>Payroll Profiles</span>
+                <strong>{{ payroll_profile_total }}</strong>
+                <small>{{ active_payroll_profile_total }} active payroll records</small>
+            </div>
+            <div class="platform-side-card">
+                <span>Missing Setup</span>
+                <strong>{{ employees_without_payroll_total }}</strong>
+                <small>Employees without payroll profile</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="platform-stats-grid">
+        <article class="platform-stat-card">
+            <span>Draft Periods</span>
+            <strong>{{ draft_period_total }}</strong>
+            <small>Payroll still being prepared</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Approved Periods</span>
+            <strong>{{ approved_period_total }}</strong>
+            <small>Ready for payout workflow</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Paid Periods</span>
+            <strong>{{ paid_period_total }}</strong>
+            <small>Completed payroll cycles</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Total Net Pay</span>
+            <strong>{{ total_net_pay|default:"0.00" }}</strong>
+            <small>Across visible payroll lines</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Active Obligations</span>
+            <strong>{{ active_obligation_total }}</strong>
+            <small>Loans and advances still deducting</small>
+        </article>
+        <article class="platform-stat-card">
+            <span>Outstanding Balance</span>
+            <strong>{{ outstanding_obligation_balance|default:"0.00" }}</strong>
+            <small>Remaining balance across active obligations</small>
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Adjustment Reports</h2>
+                <p>Track how much of payroll is being changed by bonuses, loans, penalties, and manual updates.</p>
+            </div>
+            <div class="platform-feature-grid">
+                <div class="platform-feature-card">
+                    <strong>Allowance Adjustments</strong>
+                    <span>{{ allowance_adjustments_total|default:"0.00" }}</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Deduction Adjustments</strong>
+                    <span>{{ deduction_adjustments_total|default:"0.00" }}</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Live Payroll Lines</strong>
+                    <span>{{ payroll_lines|length }}</span>
+                </div>
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Company Payroll Activity</h2>
+                <p>See where payroll activity is happening most often.</p>
+            </div>
+            {% if company_summary %}
+                <div class="platform-list">
+                    {% for company in company_summary %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ company.company__name|default:"Unassigned Company" }}</strong>
+                                <small>Payroll periods created in this workspace</small>
+                            </div>
+                            <span class="badge badge-light">{{ company.period_total }} period{{ company.period_total|pluralize }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No company payroll activity yet</h3>
+                    <p>Create payroll periods to start the reporting view.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Create Payroll Period</h2>
+                <p>Start a new payroll cycle inside the workspace.</p>
+            </div>
+            <form method="post" class="platform-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="payroll_action" value="create_period">
+                {% for field in period_form %}
+                    <div class="form-group {% if field.name == 'notes' %}platform-form-span{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="form-error">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="platform-form-actions">
+                    <button type="submit" class="btn btn-primary">Create Period</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Generate Payroll Lines</h2>
+                <p>Use payroll profiles to create salary lines for a selected period.</p>
+            </div>
+            <form method="post" class="platform-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="payroll_action" value="generate_lines">
+                {% for field in generation_form %}
+                    <div class="form-group platform-form-span">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="form-error">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="platform-form-actions">
+                    <button type="submit" class="btn btn-secondary">Generate Lines</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Create Loan / Advance</h2>
+                <p>Track employee loans and salary advances with installment deductions across payroll periods.</p>
+            </div>
+            <form method="post" class="platform-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="payroll_action" value="create_obligation">
+                {% for field in obligation_form %}
+                    <div class="form-group {% if field.name == 'notes' %}platform-form-span{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="form-error">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <div class="platform-form-actions">
+                    <button type="submit" class="btn btn-secondary">Save Obligation</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="platform-panel platform-panel-wide">
+            <div class="platform-panel-head">
+                <h2>Payroll Engine Direction</h2>
+                <p>This is the first payroll foundation for the app and can grow into a full salary system.</p>
+            </div>
+            <div class="platform-feature-grid">
+                <div class="platform-feature-card">
+                    <strong>Payroll Profiles</strong>
+                    <span>Keep salary, allowances, bank data, and payroll status linked to each employee.</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Payroll Periods</strong>
+                    <span>Track each month or cycle from draft to approved to paid.</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Payroll Lines</strong>
+                    <span>Store the calculated values per employee for each payroll period.</span>
+                </div>
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Recent Payroll Periods</h2>
+            </div>
+            {% if recent_periods %}
+                <div class="platform-list">
+                    {% for period in recent_periods %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ period.title }}</strong>
+                                <small>{{ period.company.name }} | {{ period.period_start|date:"M j" }} to {{ period.period_end|date:"M j, Y" }}</small>
+                            </div>
+                            <div class="platform-inline-actions">
+                                <span class="badge badge-primary">{{ period.get_status_display }}</span>
+                                <a href="{% url 'payroll:period_detail' period.pk %}" class="btn btn-light btn-sm">Open</a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No payroll periods yet</h3>
+                    <p>Create payroll periods in admin to begin the payroll cycle workflow.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Employees Missing Payroll Setup</h2>
+            </div>
+            {% if employees_without_payroll %}
+                <div class="platform-list">
+                    {% for employee in employees_without_payroll %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ employee.full_name }}</strong>
+                                <small>{{ employee.employee_id }} | {{ employee.branch.name }}</small>
+                            </div>
+                            <span class="badge badge-warning">Needs Profile</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>All visible employees have payroll setup</h3>
+                    <p>No missing payroll profiles were found.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Payroll Profiles</h2>
+                <p>Recently updated payroll setup records across the system.</p>
+            </div>
+            {% if payroll_profiles %}
+                <div class="platform-list">
+                    {% for profile in payroll_profiles %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ profile.employee.full_name }}</strong>
+                                <small>{{ profile.company.name }} | Base {{ profile.base_salary }} | {{ profile.get_status_display }}</small>
+                            </div>
+                            <div class="platform-inline-actions">
+                                <span class="badge badge-light">Net {{ profile.estimated_net_salary }}</span>
+                                <a href="{% url 'employees:employee_detail' profile.employee.pk %}?tab=payroll#employee-payroll-section" class="btn btn-light btn-sm">Manage</a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No payroll profiles yet</h3>
+                    <p>Create payroll setup from employee profiles to start building the payroll engine.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Allowance Total</h2>
+            </div>
+            <div class="platform-metric-box">
+                <strong>{{ total_allowances|default:"0.00" }}</strong>
+                <span>Visible payroll line allowances</span>
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Deduction Total</h2>
+            </div>
+            <div class="platform-metric-box">
+                <strong>{{ total_deductions|default:"0.00" }}</strong>
+                <span>Visible payroll line deductions</span>
+            </div>
+        </article>
+
+        <article class="platform-panel platform-panel-wide">
+            <div class="platform-panel-head">
+                <h2>Recent Payroll Lines</h2>
+            </div>
+            {% if payroll_lines %}
+                <div class="platform-list">
+                    {% for line in payroll_lines %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong><a href="{% url 'employees:employee_detail' line.employee.pk %}?tab=payroll#employee-payroll-section">{{ line.employee.full_name }}</a></strong>
+                                <small>{{ line.payroll_period.title }} | Allowances {{ line.allowances }} | Deductions {{ line.deductions }}</small>
+                            </div>
+                            <span class="badge badge-success">{{ line.net_pay }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No payroll lines yet</h3>
+                    <p>Payroll lines will appear here once payroll periods begin to store employee payouts.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel platform-panel-wide">
+            <div class="platform-panel-head">
+                <h2>Recent Adjustments</h2>
+                <p>Latest changes added to payroll lines across periods.</p>
+            </div>
+            {% if payroll_adjustments %}
+                <div class="platform-list">
+                    {% for adjustment in payroll_adjustments %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ adjustment.title }} | <a href="{% url 'employees:employee_detail' adjustment.payroll_line.employee.pk %}?tab=payroll#employee-payroll-section">{{ adjustment.payroll_line.employee.full_name }}</a></strong>
+                                <small>{{ adjustment.payroll_line.payroll_period.title }} | {{ adjustment.get_adjustment_type_display }}{% if adjustment.notes %} | {{ adjustment.notes }}{% endif %}</small>
+                            </div>
+                            <span class="badge {% if adjustment.adjustment_type == 'allowance' %}badge-primary{% else %}badge-warning{% endif %}">{{ adjustment.amount }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No adjustments yet</h3>
+                    <p>Adjustments will appear here once payroll lines start receiving bonuses, deductions, advances, or corrections.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel platform-panel-wide">
+            <div class="platform-panel-head">
+                <h2>Active Loans And Advances</h2>
+                <p>Recurring payroll obligations that generate installment deductions during payroll processing.</p>
+            </div>
+            {% if payroll_obligations %}
+                <div class="platform-list">
+                    {% for obligation in payroll_obligations %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong><a href="{% url 'employees:employee_detail' obligation.employee.pk %}?tab=payroll#employee-payroll-section">{{ obligation.employee.full_name }}</a> | {{ obligation.title }}</strong>
+                                <small>{{ obligation.get_obligation_type_display }} | Installment {{ obligation.installment_amount }} | Remaining {{ obligation.remaining_installments }} / {{ obligation.total_installments }}</small>
+                            </div>
+                            <div class="platform-inline-actions">
+                                <span class="badge badge-warning">{{ obligation.remaining_balance }}</span>
+                                <span class="badge badge-light">{{ obligation.get_status_display }}</span>
+                                {% if obligation.status == 'active' %}
+                                    <form method="post" class="platform-inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="payroll_action" value="update_obligation_status">
+                                        <input type="hidden" name="obligation_id" value="{{ obligation.pk }}">
+                                        <input type="hidden" name="target_status" value="hold">
+                                        <button type="submit" class="btn btn-light btn-sm">Pause</button>
+                                    </form>
+                                    <form method="post" class="platform-inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="payroll_action" value="update_obligation_status">
+                                        <input type="hidden" name="obligation_id" value="{{ obligation.pk }}">
+                                        <input type="hidden" name="target_status" value="completed">
+                                        <button type="submit" class="btn btn-light btn-sm">Close</button>
+                                    </form>
+                                {% elif obligation.status == 'hold' %}
+                                    <form method="post" class="platform-inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="payroll_action" value="update_obligation_status">
+                                        <input type="hidden" name="obligation_id" value="{{ obligation.pk }}">
+                                        <input type="hidden" name="target_status" value="active">
+                                        <button type="submit" class="btn btn-light btn-sm">Resume</button>
+                                    </form>
+                                    <form method="post" class="platform-inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="payroll_action" value="update_obligation_status">
+                                        <input type="hidden" name="obligation_id" value="{{ obligation.pk }}">
+                                        <input type="hidden" name="target_status" value="completed">
+                                        <button type="submit" class="btn btn-light btn-sm">Close</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No loans or advances yet</h3>
+                    <p>Create an obligation to automatically deduct installments in future payroll periods.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+</div>
+{% endblock %}

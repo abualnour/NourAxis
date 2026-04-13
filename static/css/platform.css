@@ -1,0 +1,370 @@
+.platform-page {
+    display: grid;
+    gap: 22px;
+}
+
+.platform-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+    gap: 20px;
+    padding: 30px;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--color-bg-radial) 84%, transparent), transparent 32%),
+        var(--surface-hero-gradient);
+    box-shadow: var(--shadow-md);
+}
+
+.payroll-hero {
+    background:
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 30%),
+        var(--surface-hero-gradient);
+}
+
+.platform-hero-copy h1 {
+    margin: 10px 0 12px;
+    font-size: clamp(2rem, 4vw, 3.15rem);
+    line-height: 0.98;
+    letter-spacing: -0.05em;
+}
+
+.platform-hero-copy p {
+    margin: 0;
+    max-width: 760px;
+    color: var(--color-text-soft);
+    font-size: 15px;
+    line-height: 1.8;
+}
+
+.platform-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--surface-pill-neutral-bg);
+    border: 1px solid var(--surface-pill-neutral-border);
+    color: var(--surface-pill-neutral-text);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.platform-hero-side {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+}
+
+.platform-side-card,
+.platform-stat-card,
+.platform-panel,
+.platform-feature-card {
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: var(--surface-gradient-1);
+    box-shadow: var(--shadow-sm);
+}
+
+.platform-side-card {
+    display: grid;
+    gap: 8px;
+    padding: 20px;
+}
+
+.platform-side-card span,
+.platform-stat-card span {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.platform-side-card strong,
+.platform-stat-card strong,
+.platform-metric-box strong {
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+
+.platform-side-card small,
+.platform-stat-card small,
+.platform-metric-box span {
+    color: var(--color-text-soft);
+}
+
+.platform-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.platform-stat-card {
+    display: grid;
+    gap: 7px;
+    padding: 18px 20px;
+}
+
+.platform-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.platform-panel {
+    padding: 22px;
+}
+
+.platform-panel-wide {
+    grid-column: span 2;
+}
+
+.platform-panel-head {
+    margin-bottom: 16px;
+}
+
+.platform-panel-head h2 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    letter-spacing: -0.04em;
+}
+
+.platform-panel-head p {
+    margin: 0;
+    color: var(--color-text-soft);
+    line-height: 1.7;
+}
+
+.platform-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.platform-feature-card {
+    display: grid;
+    gap: 8px;
+    padding: 18px;
+    background: var(--surface-gradient-3);
+}
+
+.platform-feature-card strong,
+.platform-list-item strong {
+    color: var(--color-text);
+}
+
+.platform-feature-card span,
+.platform-list-item small,
+.platform-list-item span {
+    color: var(--color-text-soft);
+    line-height: 1.6;
+}
+
+.platform-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.platform-form-span {
+    grid-column: 1 / -1;
+}
+
+.platform-form-actions,
+.platform-inline-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.platform-period-actions {
+    margin-top: 16px;
+}
+
+.platform-period-actions form {
+    margin: 0;
+}
+
+.platform-inline-form {
+    margin: 0;
+}
+
+.platform-list {
+    display: grid;
+    gap: 12px;
+}
+
+.platform-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 15px 16px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: var(--surface-gradient-3);
+}
+
+.payroll-edit-list {
+    gap: 16px;
+}
+
+.payroll-line-editor-card {
+    display: grid;
+    gap: 18px;
+    align-items: stretch;
+}
+
+.platform-line-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.payroll-line-form {
+    padding-top: 4px;
+}
+
+.platform-calculated-box,
+.platform-calculated-note {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface-gradient-3);
+    color: var(--color-text);
+}
+
+.platform-calculated-box {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.platform-calculated-note {
+    color: var(--color-text-soft);
+    line-height: 1.6;
+}
+
+.platform-subsection {
+    display: grid;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.platform-subsection-head h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    letter-spacing: -0.03em;
+}
+
+.platform-subsection-head p {
+    margin: 0;
+    color: var(--color-text-soft);
+    line-height: 1.6;
+}
+
+.payroll-adjustment-list {
+    gap: 10px;
+}
+
+.platform-empty-inline {
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px dashed var(--border);
+    color: var(--color-text-soft);
+    background: var(--surface-gradient-3);
+}
+
+.payslip-detail-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.payslip-actions {
+    justify-content: flex-start;
+}
+
+.platform-list-item-stack {
+    display: grid;
+    justify-content: start;
+}
+
+.platform-metric-box {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: var(--surface-gradient-3);
+}
+
+@media (max-width: 1100px) {
+    .platform-hero,
+    .platform-grid,
+    .platform-stats-grid,
+    .platform-feature-grid,
+    .platform-form-grid,
+    .payslip-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .platform-panel-wide {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 700px) {
+    .platform-hero,
+    .platform-panel {
+        padding: 18px;
+        border-radius: 22px;
+    }
+
+    .platform-list-item {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .platform-line-header {
+        flex-direction: column;
+    }
+}
+
+@media print {
+    .topbar,
+    .messages-wrapper,
+    .payslip-actions,
+    .btn,
+    button {
+        display: none !important;
+    }
+
+    body,
+    .main-content,
+    .container,
+    .platform-page {
+        background: #ffffff !important;
+        color: #111111 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .platform-hero,
+    .platform-panel,
+    .platform-side-card,
+    .platform-stat-card,
+    .platform-feature-card,
+    .platform-list-item,
+    .platform-metric-box {
+        box-shadow: none !important;
+        background: #ffffff !important;
+        border-color: #d5dbe5 !important;
+    }
+}

@@ -8,67 +8,73 @@
 {% endblock %}
 
 {% block content %}
-<div class="employee-profile-page self-service-hub-page">
+<div class="employee-profile-page self-service-hub-page branch-overview-page">
     <div class="page-header employee-profile-header">
         <div>
             <h1 class="page-title">{{ employee_display_branch|default:"My Branch" }}</h1>
-            <p class="page-subtitle">Branch team structure and your current placement, available from a dedicated page instead of the profile screen.</p>
+            <p class="page-subtitle">A simple branch page with compact details and a small team grid.</p>
         </div>
         <div class="page-actions">
             <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
-            <a class="btn btn-secondary" href="{{ self_service_attendance_url }}">Attendance</a>
+            <a class="btn btn-secondary" href="{{ self_service_weekly_schedule_url }}">Weekly Schedule</a>
         </div>
     </div>
 
     <div class="self-service-shell">
-        <div class="card detail-card modern-soft-card">
+        <div class="card detail-card modern-soft-card branch-compact-panel">
             <div class="card-header">
                 <div class="section-heading">
                     <div>
                         <h2>Branch Overview</h2>
-                        <p class="page-subtitle">All teams and active members currently linked to this branch.</p>
+                        <p class="page-subtitle">Compact branch summary using the same small-card idea as the profile details.</p>
                     </div>
                     <span class="badge badge-primary">{{ branch_team_total }} Member{{ branch_team_total|pluralize }}</span>
                 </div>
             </div>
             <div class="card-body">
-                <div class="detail-grid self-service-summary-grid" style="margin-bottom: 18px;">
-                    <div class="detail-item"><span class="detail-label">Company</span><span class="detail-value">{{ employee_display_company|default:"—" }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Branch</span><span class="detail-value">{{ employee_display_branch|default:"—" }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Department</span><span class="detail-value">{{ employee_display_department|default:"—" }}</span></div>
-                    <div class="detail-item"><span class="detail-label">Your Role</span><span class="detail-value">{{ employee_display_job_title|default:"—" }}</span></div>
+                <div class="detail-grid self-service-summary-grid branch-compact-grid">
+                    <div class="detail-item"><span class="detail-label">Company</span><span class="detail-value">{{ employee_display_company|default:"-" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Branch</span><span class="detail-value">{{ employee_display_branch|default:"-" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Department</span><span class="detail-value">{{ employee_display_department|default:"-" }}</span></div>
+                    <div class="detail-item"><span class="detail-label">Your Role</span><span class="detail-value">{{ employee_display_job_title|default:"-" }}</span></div>
                 </div>
+            </div>
+        </div>
 
-                {% if branch_team_groups %}
-                    <div class="summary-list modern-list-gap">
-                        {% for group in branch_team_groups %}
-                            <div class="summary-list-item">
-                                <div class="dashboard-team-group-head">
-                                    <h3>{{ group.label }}</h3>
-                                    <span class="badge badge-light">{{ group.members|length }} Member{{ group.members|length|pluralize }}</span>
-                                </div>
-                                <div class="dashboard-team-member-grid">
-                                    {% for member in group.members %}
-                                        <div class="dashboard-team-member-card">
-                                            <strong>{{ member.full_name }}</strong>
-                                            <span>{{ member.short_job_title_display|default:"—" }}</span>
-                                            {% if member.short_section_display %}
-                                                <small>{{ member.short_section_display }}</small>
-                                            {% endif %}
-                                        </div>
-                                    {% endfor %}
-                                </div>
+        {% if branch_team_members %}
+            <div class="card detail-card modern-soft-card branch-compact-panel">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>Team List</h2>
+                            <p class="page-subtitle">Small team cards that fit more naturally on different screen sizes.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="branch-simple-team-grid">
+                        {% for member in branch_team_members %}
+                            <div class="branch-simple-team-card">
+                                <strong>{{ member.full_name }}</strong>
+                                <span>{{ member.short_job_title_display|default:"-" }}</span>
+                                {% if member.short_section_display %}
+                                    <small>{{ member.short_section_display }}</small>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>
-                {% else %}
+                </div>
+            </div>
+        {% else %}
+            <div class="card detail-card modern-soft-card branch-compact-panel">
+                <div class="card-body">
                     <div class="empty-state">
                         <h3>No branch team records available</h3>
                         <p>Branch team members will appear here when employee records exist in the same branch.</p>
                     </div>
-                {% endif %}
+                </div>
             </div>
-        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

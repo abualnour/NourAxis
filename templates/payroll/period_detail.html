@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Payroll Period | {{ payroll_period.title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/platform.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="platform-page">
+    <section class="platform-hero payroll-hero">
+        <div class="platform-hero-copy">
+            <span class="platform-kicker">Payroll Period</span>
+            <h1>{{ payroll_period.title }}</h1>
+            <p>{{ payroll_period.company.name }} | {{ payroll_period.period_start|date:"F j, Y" }} to {{ payroll_period.period_end|date:"F j, Y" }}{% if payroll_period.pay_date %} | Pay date {{ payroll_period.pay_date|date:"F j, Y" }}{% endif %}</p>
+        </div>
+        <div class="platform-hero-side">
+            <div class="platform-side-card">
+                <span>Status</span>
+                <strong>{{ payroll_period.get_status_display }}</strong>
+                <small>Current payroll workflow stage</small>
+            </div>
+            <div class="platform-side-card">
+                <span>Employees</span>
+                <strong>{{ lines|length }}</strong>
+                <small>Payroll lines in this period</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="platform-stats-grid">
+        <article class="platform-stat-card">
+            <span>Total Base</span>
+            <strong>{{ total_base|default:"0.00" }}</strong>
+        </article>
+        <article class="platform-stat-card">
+            <span>Total Allowances</span>
+            <strong>{{ total_allowances|default:"0.00" }}</strong>
+        </article>
+        <article class="platform-stat-card">
+            <span>Total Deductions</span>
+            <strong>{{ total_deductions|default:"0.00" }}</strong>
+        </article>
+        <article class="platform-stat-card">
+            <span>Total Net</span>
+            <strong>{{ total_net|default:"0.00" }}</strong>
+        </article>
+    </section>
+
+    <section class="platform-panel">
+        <div class="platform-panel-head">
+            <h2>Period Adjustments</h2>
+            <p>Bonuses, penalties, loans, advances, and manual corrections linked to this payroll period.</p>
+        </div>
+        {% if period_adjustments %}
+            <div class="platform-list">
+                {% for adjustment in period_adjustments %}
+                    <div class="platform-list-item">
+                        <div>
+                            <strong>{{ adjustment.payroll_line.employee.full_name }} | {{ adjustment.title }}</strong>
+                            <small>{{ adjustment.get_adjustment_type_display }}{% if adjustment.notes %} | {{ adjustment.notes }}{% endif %}</small>
+                        </div>
+                        <span class="badge {% if adjustment.adjustment_type == 'allowance' %}badge-primary{% else %}badge-warning{% endif %}">{{ adjustment.amount }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <h3>No adjustments in this period</h3>
+                <p>Add bonuses, loans, penalties, or other manual adjustments directly under each payroll line.</p>
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Period Control</h2>
+                <p>Use this period as the main payroll editing board for salary adjustments, payroll workflow, and payslips.</p>
+            </div>
+            <div class="platform-feature-grid">
+                <div class="platform-feature-card">
+                    <strong>Workflow Stage</strong>
+                    <span>{{ payroll_period.get_status_display }}</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Pay Date</strong>
+                    <span>{% if payroll_period.pay_date %}{{ payroll_period.pay_date|date:"F j, Y" }}{% else %}Not scheduled yet{% endif %}</span>
+                </div>
+                <div class="platform-feature-card">
+                    <strong>Company</strong>
+                    <span>{{ payroll_period.company.name }}</span>
+                </div>
+            </div>
+            <div class="platform-form-actions platform-period-actions">
+                {% if payroll_period.can_move_to_review %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="review">
+                        <button type="submit" class="btn btn-secondary">Submit For Review</button>
+                    </form>
+                {% endif %}
+                {% if payroll_period.can_approve %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="approved">
+                        <button type="submit" class="btn btn-primary">Approve Payroll</button>
+                    </form>
+                {% endif %}
+                {% if payroll_period.can_mark_paid %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="paid">
+                        <button type="submit" class="btn btn-primary">Mark As Paid</button>
+                    </form>
+                {% endif %}
+                {% if payroll_period.status == 'review' %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="draft">
+                        <button type="submit" class="btn btn-light">Return To Draft</button>
+                    </form>
+                {% endif %}
+                {% if payroll_period.status == 'approved' %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="review">
+                        <button type="submit" class="btn btn-light">Reopen Review</button>
+                    </form>
+                {% endif %}
+                {% if payroll_period.status == 'paid' %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="payroll_action" value="change_period_status">
+                        <input type="hidden" name="target_status" value="approved">
+                        <button type="submit" class="btn btn-light">Reopen Paid Period</button>
+                    </form>
+                {% endif %}
+            </div>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Payroll Notes</h2>
+                <p>Shared period details for review and payment follow-up.</p>
+            </div>
+            <div class="platform-metric-box">
+                <strong>{{ lines|length }}</strong>
+                <span>{% if payroll_period.notes %}{{ payroll_period.notes }}{% else %}No internal notes added for this payroll period yet.{% endif %}</span>
+            </div>
+        </article>
+    </section>
+
+    <section class="platform-panel">
+        <div class="platform-panel-head">
+            <h2>Payroll Lines</h2>
+            <p>Edit salary values, overtime, deductions, and notes directly from this period.</p>
+        </div>
+        {% if lines %}
+            <div class="platform-list payroll-edit-list">
+                {% for row in line_editor_rows %}
+                    {% with line=row.line form=row.form %}
+                    <div class="platform-list-item payroll-line-editor-card">
+                        <div class="platform-line-header">
+                            <div>
+                                <strong>{{ line.employee.full_name }}</strong>
+                                <small>
+                                    {{ line.employee.employee_id }}{% if line.employee.job_title %} | {{ line.employee.job_title.name }}{% endif %}{% if line.employee.branch %} | {{ line.employee.branch.name }}{% endif %}
+                                </small>
+                            </div>
+                            <div class="platform-inline-actions">
+                                <span class="badge badge-success">Net {{ line.net_pay }}</span>
+                                <span class="badge badge-light">Gross {{ line.gross_total }}</span>
+                                <a href="{% url 'payroll:line_payslip' line.pk %}" class="btn btn-light btn-sm">Open Payslip</a>
+                            </div>
+                        </div>
+                        <form method="post" class="platform-form-grid payroll-line-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="payroll_action" value="update_line">
+                            <input type="hidden" name="line_id" value="{{ line.pk }}">
+                            <div class="form-group">
+                                <label for="{{ form.base_salary.id_for_label }}">Base Salary</label>
+                                {{ form.base_salary }}
+                                {% if form.base_salary.errors %}<div class="form-error">{{ form.base_salary.errors }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ form.allowances.id_for_label }}">Allowances</label>
+                                {{ form.allowances }}
+                                {% if form.allowances.errors %}<div class="form-error">{{ form.allowances.errors }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ form.deductions.id_for_label }}">Deductions</label>
+                                {{ form.deductions }}
+                                {% if form.deductions.errors %}<div class="form-error">{{ form.deductions.errors }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label for="{{ form.overtime_amount.id_for_label }}">Overtime</label>
+                                {{ form.overtime_amount }}
+                                {% if form.overtime_amount.errors %}<div class="form-error">{{ form.overtime_amount.errors }}</div>{% endif %}
+                            </div>
+                            <div class="form-group">
+                                <label>Calculated Net Pay</label>
+                                <div class="platform-calculated-box">{{ line.net_pay }}</div>
+                            </div>
+                            <div class="form-group platform-form-span">
+                                <label for="{{ form.notes.id_for_label }}">Notes</label>
+                                {{ form.notes }}
+                                {% if form.notes.errors %}<div class="form-error">{{ form.notes.errors }}</div>{% endif %}
+                            </div>
+                            <div class="form-group platform-form-span">
+                                <label>Formula</label>
+                                <div class="platform-calculated-note">Net Pay = Base Salary + Allowances + Overtime - Deductions</div>
+                            </div>
+                            <div class="platform-form-actions">
+                                <button type="submit" class="btn btn-primary">Save Line</button>
+                            </div>
+                        </form>
+                        <div class="platform-subsection">
+                            <div class="platform-subsection-head">
+                                <h3>Adjustments</h3>
+                                <p>Use these entries for bonus, advance, loan, penalty, or manual payroll correction.</p>
+                            </div>
+                            {% if line.adjustments.all %}
+                                <div class="platform-list payroll-adjustment-list">
+                                    {% for adjustment in line.adjustments.all %}
+                                        <div class="platform-list-item">
+                                            <div>
+                                                <strong>{{ adjustment.title }}</strong>
+                                                <small>{{ adjustment.get_adjustment_type_display }}{% if adjustment.payroll_obligation %} | {{ adjustment.payroll_obligation.get_obligation_type_display }} installment{% endif %}{% if adjustment.notes %} | {{ adjustment.notes }}{% endif %}</small>
+                                            </div>
+                                            <span class="badge {% if adjustment.adjustment_type == 'allowance' %}badge-primary{% else %}badge-warning{% endif %}">{{ adjustment.amount }}</span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="platform-empty-inline">No adjustments added yet.</div>
+                            {% endif %}
+                            <form method="post" class="platform-form-grid payroll-adjustment-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="payroll_action" value="add_adjustment">
+                                <input type="hidden" name="line_id" value="{{ line.pk }}">
+                                <div class="form-group">
+                                    <label for="{{ row.adjustment_form.title.id_for_label }}">Title</label>
+                                    {{ row.adjustment_form.title }}
+                                </div>
+                                <div class="form-group">
+                                    <label for="{{ row.adjustment_form.adjustment_type.id_for_label }}">Type</label>
+                                    {{ row.adjustment_form.adjustment_type }}
+                                </div>
+                                <div class="form-group">
+                                    <label for="{{ row.adjustment_form.amount.id_for_label }}">Amount</label>
+                                    {{ row.adjustment_form.amount }}
+                                </div>
+                                <div class="form-group platform-form-span">
+                                    <label for="{{ row.adjustment_form.notes.id_for_label }}">Notes</label>
+                                    {{ row.adjustment_form.notes }}
+                                </div>
+                                <div class="platform-form-actions">
+                                    <button type="submit" class="btn btn-secondary">Add Adjustment</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    {% endwith %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <h3>No payroll lines yet</h3>
+                <p>Generate payroll lines from the payroll workspace to populate this period.</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

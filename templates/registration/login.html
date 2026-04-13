@@ -8,34 +8,61 @@
 {% endblock %}
 
 {% block content %}
-<div class="auth-shell">
-    <div class="auth-card">
-        <div class="auth-brand">
-            <img src="{% static 'brand/nouraxis-logo.png' %}" alt="NourAxis logo" class="auth-logo">
-            <div>
-                <span class="system-home-kicker">NourAxis</span>
-                <h1 class="auth-title">Sign in to your workspace</h1>
-                <p class="auth-subtitle">Use your account email and password to open the HR system.</p>
+<section class="auth-modern-shell">
+    <div class="auth-modern-stage">
+        <div class="auth-modern-intro">
+            <div class="auth-modern-brand">
+                <img src="{% static 'brand/nouraxis-logo.png' %}" alt="NourAxis logo" class="auth-logo">
+                <div>
+                    <span class="system-home-kicker">NourAxis</span>
+                    <h1 class="auth-title">Sign in to your workspace</h1>
+                </div>
+            </div>
+
+            <p class="auth-modern-lead">
+                Access employees, branches, attendance, schedules, and self-service tools from one clean workspace built for daily operations.
+            </p>
+
+            <div class="auth-modern-points">
+                <div class="auth-modern-point">
+                    <span class="auth-modern-point-label">Employee Access</span>
+                    <strong>Profile, leave, documents, branch, and weekly schedule pages.</strong>
+                </div>
+                <div class="auth-modern-point">
+                    <span class="auth-modern-point-label">Management Access</span>
+                    <strong>Directory, attendance, requests, and organization control in one system.</strong>
+                </div>
+                <div class="auth-modern-point">
+                    <span class="auth-modern-point-label">Unified Experience</span>
+                    <strong>Modern top navigation, theme controls, and mobile-friendly layouts.</strong>
+                </div>
             </div>
         </div>
 
-        {% if form.errors %}
-            <div class="alert alert-danger">
-                Your email/password combination was not accepted. Please try again.
+        <div class="auth-modern-card">
+            <div class="auth-modern-card-head">
+                <span class="system-home-kicker">Account Login</span>
+                <h2>Welcome back</h2>
+                <p>Use your account email and password to enter the HR system.</p>
             </div>
-        {% endif %}
 
-        {% if next %}
-            {% if user.is_authenticated %}
-                <div class="alert alert-warning">Your account does not have access to that page.</div>
-            {% else %}
-                <div class="alert alert-info">Please sign in to continue.</div>
+            {% if form.errors %}
+                <div class="alert alert-danger">
+                    Your email or password was not accepted. Please try again.
+                </div>
             {% endif %}
-        {% endif %}
 
-        <form method="post" novalidate class="auth-form">
-            {% csrf_token %}
-            <div class="form-grid">
+            {% if next %}
+                {% if user.is_authenticated %}
+                    <div class="alert alert-warning">Your account does not have access to that page.</div>
+                {% else %}
+                    <div class="alert alert-info">Please sign in to continue.</div>
+                {% endif %}
+            {% endif %}
+
+            <form method="post" novalidate class="auth-modern-form">
+                {% csrf_token %}
+
                 <div class="form-group">
                     <label for="{{ form.username.id_for_label }}">Email</label>
                     {{ form.username }}
@@ -43,6 +70,7 @@
                         <div class="form-error">{{ form.username.errors }}</div>
                     {% endif %}
                 </div>
+
                 <div class="form-group">
                     <label for="{{ form.password.id_for_label }}">Password</label>
                     {{ form.password }}
@@ -50,17 +78,17 @@
                         <div class="form-error">{{ form.password.errors }}</div>
                     {% endif %}
                 </div>
-            </div>
 
-            {% if next %}
-                <input type="hidden" name="next" value="{{ next }}">
-            {% endif %}
+                {% if next %}
+                    <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
 
-            <div class="page-actions">
-                <button type="submit" class="btn btn-primary">Login</button>
-                <a href="{% url 'home' %}" class="btn btn-secondary">Back to Home</a>
-            </div>
-        </form>
+                <div class="auth-modern-actions">
+                    <button type="submit" class="btn btn-primary auth-modern-submit">Login</button>
+                    <a href="{% url 'home' %}" class="btn btn-secondary auth-modern-back">Back to Home</a>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
+</section>
 {% endblock %}
