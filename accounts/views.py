@@ -1,6 +1,6 @@
 from django.contrib.auth.views import LoginView
-from django.urls import reverse
 
+from employees.access import get_workspace_profile_url
 from employees.models import Employee
 
 
@@ -20,6 +20,6 @@ class NourAxisLoginView(LoginView):
             .first()
         )
         if employee:
-            return reverse("employees:self_service_profile")
+            return get_workspace_profile_url(user, employee)
 
-        return reverse("home")
+        return get_workspace_profile_url(user, None)

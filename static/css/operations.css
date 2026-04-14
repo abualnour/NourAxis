@@ -1,0 +1,223 @@
+.branch-workspace-page,
+.my-schedule-page {
+    display: grid;
+    gap: 18px;
+}
+
+.branch-workspace-shell,
+.branch-workspace-layout,
+.branch-workspace-hero-grid {
+    display: grid;
+    gap: 18px;
+}
+
+.branch-workspace-hero-grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+}
+
+.branch-workspace-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+    align-items: start;
+}
+
+.branch-workspace-main,
+.branch-workspace-side {
+    display: grid;
+    gap: 18px;
+}
+
+.branch-workspace-panel {
+    margin-bottom: 0;
+}
+
+.workspace-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.schedule-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workspace-kpi {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-gradient-3);
+    display: grid;
+    gap: 6px;
+}
+
+.workspace-kpi-label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.workspace-kpi strong {
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1.15;
+}
+
+.workspace-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.workspace-form,
+.workspace-form-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.workspace-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-form-grid .form-group-full {
+    grid-column: 1 / -1;
+}
+
+.branch-post-list,
+.branch-reply-list,
+.schedule-entry-list,
+.schedule-side-list,
+.workspace-timeline,
+.status-action-list {
+    display: grid;
+    gap: 12px;
+}
+
+.branch-post-card,
+.branch-reply-card,
+.schedule-entry-card,
+.schedule-side-item,
+.workspace-timeline-item,
+.schedule-focus-card,
+.branch-member-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface-gradient-3);
+}
+
+.branch-member-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.branch-member-card {
+    display: grid;
+    gap: 4px;
+}
+
+.branch-member-card strong,
+.branch-post-head h3,
+.schedule-focus-card h3 {
+    margin: 0;
+}
+
+.branch-post-head,
+.branch-reply-head,
+.schedule-entry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.branch-post-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.branch-post-meta,
+.branch-post-footer,
+.schedule-entry-head span,
+.branch-reply-head span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.branch-post-snippet,
+.branch-post-body p,
+.schedule-entry-note,
+.workspace-timeline-item p {
+    margin: 10px 0 0;
+    color: var(--text-soft);
+    line-height: 1.6;
+}
+
+.branch-post-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.schedule-entry-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.schedule-entry-grid div {
+    display: grid;
+    gap: 5px;
+}
+
+.schedule-entry-grid span,
+.schedule-side-item small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.status-action-list form {
+    margin: 0;
+}
+
+.branch-status-action {
+    width: 100%;
+}
+
+.branch-schedule-toolbar {
+    margin-top: 14px;
+}
+
+.branch-schedule-public-cell {
+    display: grid;
+    gap: 4px;
+    min-width: 150px;
+}
+
+.branch-schedule-public-cell strong {
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.branch-schedule-public-cell span,
+.branch-schedule-public-cell small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+    .branch-workspace-layout,
+    .branch-workspace-hero-grid,
+    .workspace-kpi-grid,
+    .schedule-entry-grid,
+    .workspace-form-grid,
+    .branch-member-grid,
+    .schedule-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}

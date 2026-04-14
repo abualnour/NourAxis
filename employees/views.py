@@ -1,5 +1,7 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+import csv
 from decimal import Decimal
+import io
 import mimetypes
 import re
 from pathlib import Path
@@ -12,7 +14,7 @@ from django.core.paginator import Paginator
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Case, IntegerField, Prefetch, Q, When
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -23,11 +25,30 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from config.mixins import ProtectedDeleteMixin
 from organization.models import Branch, Company, Department, JobTitle, Section
 from payroll.forms import PayrollProfileForm
+from operations.forms import BranchPostForm
+from operations.services import build_branch_workspace_context, build_employee_schedule_snapshot
+from openpyxl import Workbook, load_workbook
 
+from .access import (
+    get_user_scope_branch as get_user_scope_branch_for_role,
+    get_workspace_home_label,
+    get_workspace_profile_url,
+    is_admin_compatible as is_admin_compatible_role,
+    is_branch_scoped_supervisor as is_branch_scoped_supervisor_for_role,
+    is_employee_role_user as is_employee_role_user_role,
+    is_hr_user as is_hr_user_role,
+    is_operations_manager_user as is_operations_manager_user_role,
+    is_supervisor_user as is_supervisor_user_role,
+    should_use_management_own_profile,
+)
 from .forms import (
     AttendanceFilterForm,
     AttendanceManagementFilterForm,
+    BranchWeeklyScheduleThemeForm,
+    BranchWeeklyDutyOptionStyleForm,
+    BranchWeeklyDutyOptionTimingForm,
     BranchWeeklyDutyOptionForm,
+    BranchWeeklyScheduleImportForm,
     BranchWeeklyPendingOffForm,
     BranchWeeklyScheduleEntryForm,
     EmployeeActionRecordForm,
@@ -50,6 +71,7 @@ from .models import (
     BranchScheduleGridCell,
     BranchScheduleGridHeader,
     BranchScheduleGridRow,
+    BranchWeeklyScheduleTheme,
     BranchWeeklyDutyOption,
     BranchWeeklyPendingOff,
     BranchWeeklyScheduleEntry,
@@ -141,11 +163,7 @@ def get_safe_next_url(request, fallback_url):
 
 
 def get_self_service_home_label(employee, user):
-    if is_operations_manager_user(user):
-        return "Operations Self-Service"
-    if is_branch_scoped_supervisor(user):
-        return "Supervisor Self-Service"
-    return "Employee Self-Service"
+    return get_workspace_home_label(user, employee)
 
 
 def build_self_service_page_context(request, employee, *, current_section):
@@ -155,13 +173,14 @@ def build_self_service_page_context(request, employee, *, current_section):
     context = detail_view.get_context_data(object=employee)
     context["self_service_home_label"] = get_self_service_home_label(employee, request.user)
     context["self_service_current_section"] = current_section
-    context["self_service_profile_url"] = reverse("employees:self_service_profile")
+    context["self_service_profile_url"] = get_workspace_profile_url(request.user, employee)
     context["self_service_leave_url"] = reverse("employees:self_service_leave")
     context["self_service_documents_url"] = reverse("employees:self_service_documents")
     context["self_service_attendance_url"] = reverse("employees:self_service_attendance")
     context["self_service_working_time_url"] = reverse("employees:self_service_working_time")
     context["self_service_branch_url"] = reverse("employees:self_service_branch")
     context["self_service_weekly_schedule_url"] = reverse("employees:self_service_weekly_schedule")
+    context["self_service_my_schedule_url"] = reverse("employees:self_service_my_schedule")
     return context
 
 
@@ -176,26 +195,12 @@ def build_attendance_location_label(cleaned_data):
         return ""
 
     primary_label = (cleaned_data.get("location_label") or "").strip()
-    address_bits = []
+    location_address = (cleaned_data.get("location_address") or "").strip()
 
-    city = (cleaned_data.get("city") or "").strip()
-    street = (cleaned_data.get("street") or "").strip()
-    block = (cleaned_data.get("block") or "").strip()
-    building_number = (cleaned_data.get("building_number") or "").strip()
-
-    if city:
-        address_bits.append(city)
-    if street:
-        address_bits.append(f"Street {street}")
-    if block:
-        address_bits.append(f"Block {block}")
-    if building_number:
-        address_bits.append(f"Building {building_number}")
-
-    if primary_label and address_bits:
-        return f"{primary_label} - {', '.join(address_bits)}"
-    if address_bits:
-        return ", ".join(address_bits)
+    if primary_label and location_address:
+        return f"{primary_label} - {location_address}"
+    if location_address:
+        return location_address
     return primary_label
 
 
@@ -228,11 +233,31 @@ def sync_attendance_event_to_ledger(event, actor_label="System"):
     ledger.clock_out_time = clock_out_time
     ledger.scheduled_hours = WORKING_HOURS_PER_DAY
     ledger.source = EmployeeAttendanceLedger.SOURCE_SYSTEM
+    ledger.check_in_latitude = event.check_in_latitude
+    ledger.check_in_longitude = event.check_in_longitude
+    ledger.check_out_latitude = event.check_out_latitude
+    ledger.check_out_longitude = event.check_out_longitude
+    ledger.check_in_location_label = event.check_in_location_label or ""
+    ledger.check_out_location_label = event.check_out_location_label or ""
+    ledger.check_in_address = event.check_in_address or ""
+    ledger.check_out_address = event.check_out_address or ""
     location_bits = []
     if event.check_in_location_label:
         location_bits.append(f"Check-in: {event.check_in_location_label}")
     if event.check_out_location_label:
         location_bits.append(f"Check-out: {event.check_out_location_label}")
+    if event.check_in_address and event.check_in_address != event.check_in_location_label:
+        location_bits.append(f"Check-in address: {event.check_in_address}")
+    if event.check_out_address and event.check_out_address != event.check_out_location_label:
+        location_bits.append(f"Check-out address: {event.check_out_address}")
+    if event.check_in_latitude is not None and event.check_in_longitude is not None:
+        location_bits.append(
+            f"Check-in coordinates: {event.check_in_latitude}, {event.check_in_longitude}"
+        )
+    if event.check_out_latitude is not None and event.check_out_longitude is not None:
+        location_bits.append(
+            f"Check-out coordinates: {event.check_out_latitude}, {event.check_out_longitude}"
+        )
     event_note = "Self-service attendance"
     if location_bits:
         event_note = f"{event_note}. {' | '.join(location_bits)}"
@@ -249,33 +274,23 @@ def sync_attendance_event_to_ledger(event, actor_label="System"):
 
 
 def is_admin_compatible(user):
-    if not user or not user.is_authenticated:
-        return False
-
-    if getattr(user, "is_superuser", False):
-        return True
-
-    role_value = (getattr(user, "role", "") or "").strip().lower()
-    if role_value in {"hr", "supervisor", "operations_manager", "employee"}:
-        return False
-
-    return bool(getattr(user, "is_staff", False))
+    return is_admin_compatible_role(user)
 
 
 def is_hr_user(user):
-    return bool(user and user.is_authenticated and getattr(user, "is_hr", False))
+    return is_hr_user_role(user)
 
 
 def is_supervisor_user(user):
-    return bool(user and user.is_authenticated and getattr(user, "is_supervisor", False))
+    return is_supervisor_user_role(user)
 
 
 def is_operations_manager_user(user):
-    return bool(user and user.is_authenticated and getattr(user, "is_operations_manager", False))
+    return is_operations_manager_user_role(user)
 
 
 def is_employee_role_user(user):
-    return bool(user and user.is_authenticated and getattr(user, "is_employee_role", False))
+    return is_employee_role_user_role(user)
 
 
 def is_management_user(user):
@@ -297,18 +312,13 @@ def is_self_employee(user, employee):
 
 
 def get_user_scope_branch(user):
-    if not is_supervisor_user(user) or is_hr_user(user) or is_operations_manager_user(user) or is_admin_compatible(user):
-        return None
-
     linked_employee = get_user_employee_profile(user)
-    if not linked_employee or not linked_employee.branch_id:
-        return None
-
-    return linked_employee.branch
+    return get_user_scope_branch_for_role(user, linked_employee)
 
 
 def is_branch_scoped_supervisor(user):
-    return get_user_scope_branch(user) is not None
+    linked_employee = get_user_employee_profile(user)
+    return is_branch_scoped_supervisor_for_role(user, linked_employee)
 
 
 def can_supervisor_view_employee(user, employee):
@@ -1591,6 +1601,17 @@ def build_branch_weekly_schedule_summary(branch, week_start):
         .filter(branch=branch, is_active=True)
         .order_by("full_name", "employee_id")
     )
+    row_order_map = {
+        row.employee_id: row.row_index
+        for row in BranchScheduleGridRow.objects.filter(branch=branch, employee__isnull=False).select_related("employee")
+    }
+    team_members.sort(
+        key=lambda member: (
+            row_order_map.get(member.id, 9999),
+            member.full_name.lower(),
+            member.employee_id.lower(),
+        )
+    )
     week_days = build_schedule_week_days(week_start)
     schedule_entries = list(
         BranchWeeklyScheduleEntry.objects.select_related(
@@ -1676,6 +1697,428 @@ def build_branch_weekly_schedule_summary(branch, week_start):
             1 for entry in schedule_entries if entry.status == BranchWeeklyScheduleEntry.STATUS_ON_HOLD
         ),
     }
+
+
+SCHEDULE_IMPORT_COLUMNS = [
+    "employee_id",
+    "employee_name",
+    "schedule_date",
+    "duty_label",
+    "custom_label",
+    "shift_label",
+    "start_time",
+    "end_time",
+    "status",
+    "order_note",
+]
+
+SCHEDULE_IMPORT_HEADER_ALIASES = {
+    "employee code": "employee_id",
+    "employee_code": "employee_id",
+    "employee id": "employee_id",
+    "employee": "employee_name",
+    "employee name": "employee_name",
+    "date": "schedule_date",
+    "duty": "duty_label",
+    "duty option": "duty_label",
+    "duty_option": "duty_label",
+    "shift": "shift_label",
+    "shift label": "shift_label",
+    "shift_label": "shift_label",
+    "custom duty": "custom_label",
+    "custom_label": "custom_label",
+    "start": "start_time",
+    "start time": "start_time",
+    "start_time": "start_time",
+    "end": "end_time",
+    "end time": "end_time",
+    "end_time": "end_time",
+    "note": "order_note",
+    "notes": "order_note",
+    "order": "order_note",
+    "order note": "order_note",
+    "order_note": "order_note",
+    "pending off": "pending_off",
+    "pending_off": "pending_off",
+}
+
+SCHEDULE_WEEKDAY_NAMES = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+]
+
+
+def normalize_schedule_import_header(value):
+    cleaned = ((value or "").strip().lower()).replace("-", " ").replace("/", " ")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return SCHEDULE_IMPORT_HEADER_ALIASES.get(cleaned, cleaned.replace(" ", "_"))
+
+
+def parse_schedule_import_date(value):
+    if value in [None, ""]:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    formats = ("%Y-%m-%d", "%d-%b-%Y", "%d-%B-%Y", "%d/%m/%Y", "%m/%d/%Y")
+    for pattern in formats:
+        try:
+            return timezone.datetime.strptime(text, pattern).date()
+        except ValueError:
+            continue
+
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def parse_schedule_import_time(value):
+    if value in [None, ""]:
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    for pattern in ("%H:%M", "%I:%M %p", "%I %p"):
+        try:
+            return timezone.datetime.strptime(text, pattern).time()
+        except ValueError:
+            continue
+    return None
+
+
+def infer_shift_times_from_label(label):
+    text = (label or "").strip()
+    if not text:
+        return None, None
+
+    range_match = re.match(r"^\s*(.+?)\s+to\s+(.+?)\s*$", text, flags=re.IGNORECASE)
+    if not range_match:
+        return None, None
+
+    start_time = parse_schedule_import_time(range_match.group(1))
+    end_time = parse_schedule_import_time(range_match.group(2))
+    return start_time, end_time
+
+
+def get_schedule_import_raw_rows(uploaded_file):
+    filename = (uploaded_file.name or "").lower()
+
+    if filename.endswith(".csv"):
+        decoded = uploaded_file.read().decode("utf-8-sig")
+        return list(csv.reader(io.StringIO(decoded)))
+
+    workbook = load_workbook(uploaded_file, data_only=True)
+    worksheet = workbook.active
+    return list(worksheet.iter_rows(values_only=True))
+
+
+def is_branch_schedule_matrix_format(raw_rows):
+    if len(raw_rows) < 2:
+        return False
+
+    header_row = [normalize_schedule_import_header(value) for value in raw_rows[0]]
+    weekday_hits = sum(1 for value in header_row if value in SCHEDULE_WEEKDAY_NAMES)
+    return "employee_id" in header_row and weekday_hits >= 5
+
+
+def build_schedule_import_rows_from_matrix(raw_rows):
+    header_row = list(raw_rows[0])
+    date_row = list(raw_rows[1]) if len(raw_rows) > 1 else []
+    normalized_headers = [normalize_schedule_import_header(value) for value in header_row]
+
+    employee_id_index = normalized_headers.index("employee_id")
+    pending_off_index = normalized_headers.index("pending_off") if "pending_off" in normalized_headers else -1
+    employee_name_index = -1
+    weekday_column_map = {}
+
+    for index, header in enumerate(normalized_headers):
+        if header in SCHEDULE_WEEKDAY_NAMES:
+            weekday_column_map[index] = header
+
+    for index, header in enumerate(normalized_headers):
+        if index in weekday_column_map or index == employee_id_index or index == pending_off_index:
+            continue
+        header_text = str(header_row[index] or "").strip()
+        if header_text:
+            employee_name_index = index
+            break
+
+    rows = []
+    for raw_row in raw_rows[2:]:
+        if not raw_row:
+            continue
+
+        employee_id_value = str(raw_row[employee_id_index] or "").strip() if employee_id_index < len(raw_row) else ""
+        employee_name_value = str(raw_row[employee_name_index] or "").strip() if employee_name_index >= 0 and employee_name_index < len(raw_row) else ""
+        pending_off_value = str(raw_row[pending_off_index] or "").strip() if pending_off_index >= 0 and pending_off_index < len(raw_row) else ""
+
+        if not employee_id_value and not employee_name_value:
+            continue
+
+        for column_index, weekday_name in weekday_column_map.items():
+            schedule_date = parse_schedule_import_date(date_row[column_index] if column_index < len(date_row) else None)
+            duty_value = str(raw_row[column_index] or "").strip() if column_index < len(raw_row) else ""
+            if not schedule_date and not duty_value:
+                continue
+
+            rows.append(
+                {
+                    "employee_id": employee_id_value,
+                    "employee_name": employee_name_value,
+                    "schedule_date": schedule_date,
+                    "duty_label": duty_value,
+                    "custom_label": "",
+                    "shift_label": duty_value,
+                    "start_time": "",
+                    "end_time": "",
+                    "status": BranchWeeklyScheduleEntry.STATUS_PLANNED,
+                    "order_note": "",
+                    "pending_off": pending_off_value,
+                    "weekday_name": weekday_name,
+                }
+            )
+
+    return rows
+
+
+def get_schedule_import_rows(uploaded_file):
+    raw_rows = get_schedule_import_raw_rows(uploaded_file)
+    if not raw_rows:
+        return []
+
+    if is_branch_schedule_matrix_format(raw_rows):
+        return build_schedule_import_rows_from_matrix(raw_rows)
+
+    headers = [normalize_schedule_import_header(value) for value in raw_rows[0]]
+    rows = []
+    for raw_row in raw_rows[1:]:
+        row = {}
+        for index, header in enumerate(headers):
+            if not header:
+                continue
+            row[header] = raw_row[index] if index < len(raw_row) else ""
+        rows.append(row)
+    return rows
+
+
+def get_or_create_branch_duty_option_for_import(branch, row, duty_option_map):
+    duty_label = str(row.get("duty_label") or row.get("shift_label") or row.get("custom_label") or "").strip()
+    if not duty_label:
+        return None
+
+    key = duty_label.lower()
+    existing_option = duty_option_map.get(key)
+    if existing_option:
+        return existing_option
+
+    start_time = parse_schedule_import_time(row.get("start_time"))
+    end_time = parse_schedule_import_time(row.get("end_time"))
+    if not (start_time and end_time):
+        inferred_start_time, inferred_end_time = infer_shift_times_from_label(duty_label)
+        start_time = start_time or inferred_start_time
+        end_time = end_time or inferred_end_time
+    lowered = duty_label.lower()
+
+    if lowered in {"off", "day off"}:
+        duty_type = BranchWeeklyScheduleEntry.DUTY_TYPE_OFF
+        start_time = None
+        end_time = None
+    elif lowered in {"extra off", "extra_off"}:
+        duty_type = BranchWeeklyScheduleEntry.DUTY_TYPE_EXTRA_OFF
+        start_time = None
+        end_time = None
+    elif start_time and end_time:
+        duty_type = BranchWeeklyScheduleEntry.DUTY_TYPE_SHIFT
+    else:
+        duty_type = BranchWeeklyScheduleEntry.DUTY_TYPE_CUSTOM
+        start_time = None
+        end_time = None
+
+    created_option = BranchWeeklyDutyOption.objects.create(
+        branch=branch,
+        label=duty_label,
+        duty_type=duty_type,
+        default_start_time=start_time,
+        default_end_time=end_time,
+        display_order=BranchWeeklyDutyOption.objects.filter(branch=branch).count() + 1,
+        is_active=True,
+    )
+    duty_option_map[key] = created_option
+    return created_option
+
+
+def import_branch_weekly_schedule_file(*, branch, week_start, uploaded_file, actor_label="", replace_existing=False):
+    week_end = week_start + timedelta(days=6)
+    team_members = list(Employee.objects.filter(branch=branch, is_active=True).order_by("full_name", "employee_id"))
+    employee_map = {member.employee_id.strip().lower(): member for member in team_members if member.employee_id}
+    duty_option_map = {
+        option.label.strip().lower(): option
+        for option in BranchWeeklyDutyOption.objects.filter(branch=branch)
+    }
+    pending_off_updates = {}
+
+    rows = get_schedule_import_rows(uploaded_file)
+    imported_count = 0
+    errors = []
+    skipped_empty_cells = 0
+
+    if replace_existing:
+        BranchWeeklyScheduleEntry.objects.filter(branch=branch, week_start=week_start).delete()
+        BranchWeeklyPendingOff.objects.filter(branch=branch, week_start=week_start).delete()
+
+    for row_number, row in enumerate(rows, start=2):
+        employee_id_value = str(row.get("employee_id") or "").strip().lower()
+        schedule_date = parse_schedule_import_date(row.get("schedule_date"))
+
+        if not employee_id_value and not schedule_date:
+            continue
+
+        employee = employee_map.get(employee_id_value)
+        if not employee:
+            errors.append(f"Row {row_number}: employee_id '{row.get('employee_id')}' was not found in this branch.")
+            continue
+
+        pending_off_value = str(row.get("pending_off") or "").strip()
+        if pending_off_value.isdigit():
+            pending_off_updates[employee.id] = int(pending_off_value)
+
+        if not schedule_date:
+            errors.append(f"Row {row_number}: schedule_date is missing or invalid.")
+            continue
+
+        if schedule_date < week_start or schedule_date > week_end:
+            errors.append(f"Row {row_number}: schedule_date {schedule_date} is outside the selected week.")
+            continue
+
+        duty_label = str(row.get("duty_label") or row.get("shift_label") or row.get("custom_label") or "").strip()
+        if not duty_label:
+            skipped_empty_cells += 1
+            continue
+
+        duty_option = get_or_create_branch_duty_option_for_import(branch, row, duty_option_map)
+        if not duty_option:
+            errors.append(f"Row {row_number}: duty_label or shift_label is required.")
+            continue
+
+        status_value = str(row.get("status") or "").strip().lower() or BranchWeeklyScheduleEntry.STATUS_PLANNED
+        valid_statuses = {choice[0] for choice in BranchWeeklyScheduleEntry.STATUS_CHOICES}
+        if status_value not in valid_statuses:
+            status_value = BranchWeeklyScheduleEntry.STATUS_PLANNED
+
+        BranchWeeklyScheduleEntry.objects.update_or_create(
+            branch=branch,
+            employee=employee,
+            schedule_date=schedule_date,
+            defaults={
+                "week_start": week_start,
+                "duty_option": duty_option,
+                "title": str(row.get("custom_label") or "").strip(),
+                "order_note": str(row.get("order_note") or "").strip(),
+                "status": status_value,
+                "created_by": actor_label,
+                "updated_by": actor_label,
+            },
+        )
+        imported_count += 1
+
+    for employee_id, pending_off_count in pending_off_updates.items():
+        BranchWeeklyPendingOff.objects.update_or_create(
+            branch=branch,
+            employee_id=employee_id,
+            week_start=week_start,
+            defaults={
+                "pending_off_count": pending_off_count,
+                "created_by": actor_label,
+                "updated_by": actor_label,
+            },
+        )
+
+    return {
+        "imported_count": imported_count,
+        "errors": errors,
+        "parsed_row_count": len(rows),
+        "skipped_empty_cells": skipped_empty_cells,
+        "replace_existing": replace_existing,
+    }
+
+
+def build_branch_schedule_export_workbook(branch, week_start, *, include_existing_entries=True):
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Branch Schedule"
+
+    team_members = list(
+        Employee.objects.select_related("job_title")
+        .filter(branch=branch, is_active=True)
+        .order_by("full_name", "employee_id")
+    )
+    entry_map = {}
+    if include_existing_entries:
+        entry_map = {
+            (entry.employee_id, entry.schedule_date): entry
+            for entry in BranchWeeklyScheduleEntry.objects.select_related("duty_option").filter(
+                branch=branch,
+                week_start=week_start,
+            )
+        }
+    pending_off_map = {
+        record.employee_id: record.pending_off_count
+        for record in BranchWeeklyPendingOff.objects.filter(branch=branch, week_start=week_start)
+    }
+
+    week_days = build_schedule_week_days(week_start)
+    header_row = [
+        week_start.strftime("%B"),
+        "Employee Code",
+        branch.name,
+        "Pending off",
+    ] + [day.strftime("%A") for day in week_days]
+    date_row = ["", "", "", ""] + [f"{day.day}-{day.strftime('%b-%Y')}" if hasattr(day, "strftime") else "" for day in week_days]
+
+    worksheet.append(header_row)
+    worksheet.append(date_row)
+
+    for member in team_members:
+        row_values = [
+            "",
+            member.employee_id,
+            member.full_name,
+            pending_off_map.get(member.id, 0),
+        ]
+        for schedule_date in week_days:
+            entry = entry_map.get((member.id, schedule_date))
+            if entry:
+                row_values.append(entry.sheet_value)
+            else:
+                row_values.append("")
+        worksheet.append(row_values)
+
+    instructions = workbook.create_sheet("Instructions")
+    instructions.append(["Section", "Meaning"])
+    instructions.append(["Row 1", "Main roster header. Keep weekday columns in the same order."])
+    instructions.append(["Row 2", "Date row. Keep dates inside the selected branch week."])
+    instructions.append(["Employee Code", "Required. Must match a branch employee code in the app."])
+    instructions.append([branch.name, "Employee name column for visual use."])
+    instructions.append(["Pending off", "Optional number for pending off days in that week."])
+    instructions.append(["Day cells", "Use values like 2 pm to 10 pm, 9 am to 5 pm, off, extra off, or any custom duty label."])
+    instructions.append(["Import result", "The app stores imported values in BranchWeeklyScheduleEntry and BranchWeeklyPendingOff."])
+    return workbook
 
 
 
@@ -2422,14 +2865,13 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
             and is_branch_scoped_supervisor(current_user)
             and can_view_management_employee_sections(current_user, employee)
         )
-        is_operations_own_profile_view = bool(
-            is_self_profile
-            and is_operations_manager_user(current_user)
-            and can_view_management_employee_sections(current_user, employee)
+        is_operations_own_profile_view = False
+        is_management_own_profile_view = bool(
+            is_self_profile and should_use_management_own_profile(current_user, employee)
         )
         is_branch_scoped_supervisor_view = is_branch_scoped_supervisor(current_user) and not is_self_service_view
         is_self_focused_profile_view = bool(
-            is_self_service_view or is_supervisor_own_profile_view or is_operations_own_profile_view
+            is_self_service_view or is_supervisor_own_profile_view
         )
 
         all_documents = list(employee.documents.select_related("linked_leave").all())
@@ -2747,6 +3189,7 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
         context["is_self_service_view"] = is_self_service_view
         context["is_supervisor_own_profile_view"] = is_supervisor_own_profile_view
         context["is_operations_own_profile_view"] = is_operations_own_profile_view
+        context["is_management_own_profile_view"] = is_management_own_profile_view
         context["is_self_focused_profile_view"] = is_self_focused_profile_view
         context["can_cancel_leave"] = True
 
@@ -2892,6 +3335,9 @@ def self_service_profile_page(request):
             employee=employee,
         )
 
+    if should_use_management_own_profile(request.user, employee):
+        return redirect(get_workspace_profile_url(request.user, employee))
+
     context = build_self_service_page_context(
         request,
         employee,
@@ -2975,7 +3421,7 @@ def self_service_branch_page(request):
         messages.error(request, "This employee is not linked to any branch yet.")
         return redirect("employees:self_service_profile")
 
-    week_value = (request.GET.get("week") or "").strip()
+    week_value = (request.POST.get("week") or request.GET.get("week") or "").strip()
     selected_week_start = get_schedule_week_start(timezone.localdate())
     if week_value:
         try:
@@ -2990,9 +3436,27 @@ def self_service_branch_page(request):
     )
     context.update(build_branch_team_structure(employee))
     context.update(build_branch_weekly_schedule_summary(employee.branch, selected_week_start))
+    context.update(
+        build_branch_workspace_context(
+            employee.branch,
+            request.user,
+            employee=employee,
+            week_start=selected_week_start,
+        )
+    )
+    context.update(build_employee_schedule_snapshot(employee))
     context["branch"] = employee.branch
     context["selected_week_start"] = selected_week_start
     context["can_manage_branch_weekly_schedule"] = can_manage_branch_weekly_schedule(request.user, employee.branch)
+    context["branch_post_form"] = BranchPostForm(
+        branch=employee.branch,
+        can_manage=context["can_manage_branch_workspace"],
+    )
+    context["branch_workspace_detail_url"] = reverse(
+        "operations:branch_workspace_detail",
+        kwargs={"branch_id": employee.branch_id},
+    )
+    context["branch_workspace_schedule_url"] = reverse("employees:self_service_weekly_schedule")
     return render(request, "employees/self_service_branch.html", context)
 
 
@@ -3021,84 +3485,150 @@ def self_service_weekly_schedule_page(request):
 
     branch = employee.branch
     can_manage_schedule = can_manage_branch_weekly_schedule(request.user, branch)
-    edit_entry = None
-    option_edit = None
-    selected_edit_employee = None
-    selected_edit_day = None
+    import_form = BranchWeeklyScheduleImportForm()
 
     if request.method == "POST" and can_manage_schedule:
         action = (request.POST.get("schedule_action") or "").strip()
 
-        if action == "save_free_grid":
-            team_members = list(Employee.objects.filter(branch=branch, is_active=True).order_by("full_name", "employee_id"))
-            employee_map = {member.id: member for member in team_members}
-            row_total = len(team_members)
-            existing_rows = {
-                row.row_index: row
-                for row in BranchScheduleGridRow.objects.filter(branch=branch, row_index__lte=max(row_total, 1))
-            }
-            existing_headers = {
-                header.column_index: header
-                for header in BranchScheduleGridHeader.objects.filter(branch=branch)
-            }
-            existing_cells = {
-                (cell.row_index, cell.column_index): cell
-                for cell in BranchScheduleGridCell.objects.filter(branch=branch, row_index__lte=max(row_total, 1))
-            }
-
-            for header_index in range(0, 12):
-                header_value = (request.POST.get(f"header_{header_index}") or "").strip()
-                existing_header = existing_headers.get(header_index)
-                if header_value:
-                    if existing_header:
-                        existing_header.label = header_value
-                        existing_header.save(update_fields=["label", "updated_at"])
-                    else:
-                        BranchScheduleGridHeader.objects.create(
-                            branch=branch,
-                            column_index=header_index,
-                            label=header_value,
-                        )
-                elif existing_header:
-                    existing_header.delete()
-
-            for row_index in range(1, row_total + 1):
-                selected_employee_id = (request.POST.get(f"row_employee_{row_index}") or "").strip()
-                selected_employee = employee_map.get(int(selected_employee_id)) if selected_employee_id.isdigit() and int(selected_employee_id) in employee_map else None
-                existing_row = existing_rows.get(row_index)
-
-                if existing_row:
-                    existing_row.employee = selected_employee
-                    existing_row.save(update_fields=["employee", "updated_at"])
-                else:
-                    BranchScheduleGridRow.objects.create(
-                        branch=branch,
-                        row_index=row_index,
-                        employee=selected_employee,
+        if action == "import_schedule":
+            import_form = BranchWeeklyScheduleImportForm(request.POST, request.FILES)
+            if import_form.is_valid():
+                import_result = import_branch_weekly_schedule_file(
+                    branch=branch,
+                    week_start=selected_week_start,
+                    uploaded_file=import_form.cleaned_data["import_file"],
+                    actor_label=get_actor_label(request.user),
+                    replace_existing=import_form.cleaned_data.get("replace_existing", False),
+                )
+                if import_result["imported_count"]:
+                    mode_label = "replaced" if import_result.get("replace_existing") else "merged into"
+                    messages.success(
+                        request,
+                        f"Imported {import_result['imported_count']} schedule row(s) and {mode_label} the selected branch week.",
                     )
+                elif import_result.get("replace_existing"):
+                    messages.warning(
+                        request,
+                        "The current week was cleared, but no non-empty duty cells were imported from the file.",
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        "No schedule rows were imported. If you want the uploaded file to fully replace the current sheet, keep 'Replace current week schedule before import' checked.",
+                    )
+                if import_result.get("skipped_empty_cells"):
+                    messages.info(
+                        request,
+                        f"Skipped {import_result['skipped_empty_cells']} empty schedule cell(s). Empty cells only clear old values when replacement mode is enabled.",
+                    )
+                if import_result["errors"]:
+                    messages.warning(request, "Some rows were skipped during import: " + " | ".join(import_result["errors"][:5]))
+                return redirect(f"{reverse('employees:self_service_weekly_schedule')}?week={selected_week_start.isoformat()}")
+            messages.error(request, "Please upload a valid .xlsx or .csv file for schedule import.")
 
-                for column_index in range(1, FREE_SCHEDULE_GRID_COLUMN_COUNT + 1):
-                    input_name = f"grid_{row_index}_{column_index}"
-                    submitted_value = (request.POST.get(input_name) or "").strip()
-                    existing_cell = existing_cells.get((row_index, column_index))
+        if action == "export_schedule":
+            workbook = build_branch_schedule_export_workbook(branch, selected_week_start, include_existing_entries=True)
+            response = HttpResponse(
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            response["Content-Disposition"] = (
+                f'attachment; filename="{branch.name.lower().replace(" ", "-")}-schedule-{selected_week_start.isoformat()}.xlsx"'
+            )
+            workbook.save(response)
+            return response
 
-                    if submitted_value:
-                        if existing_cell:
-                            if existing_cell.value != submitted_value:
-                                existing_cell.value = submitted_value
-                                existing_cell.save(update_fields=["value", "updated_at"])
-                        else:
-                            BranchScheduleGridCell.objects.create(
-                                branch=branch,
-                                row_index=row_index,
-                                column_index=column_index,
-                                value=submitted_value,
-                            )
-                    elif existing_cell:
-                        existing_cell.delete()
+        if action == "export_schedule_template":
+            workbook = build_branch_schedule_export_workbook(branch, selected_week_start, include_existing_entries=False)
+            response = HttpResponse(
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            response["Content-Disposition"] = (
+                f'attachment; filename="{branch.name.lower().replace(" ", "-")}-schedule-template-{selected_week_start.isoformat()}.xlsx"'
+            )
+            workbook.save(response)
+            return response
 
-            messages.success(request, "Spreadsheet grid saved successfully.")
-            return redirect("employees:self_service_weekly_schedule")
+        if action == "update_duty_option_style":
+            duty_option = get_object_or_404(
+                BranchWeeklyDutyOption,
+                pk=request.POST.get("duty_option_id"),
+                branch=branch,
+            )
+            duty_option_form = BranchWeeklyDutyOptionStyleForm(request.POST, instance=duty_option)
+            if duty_option_form.is_valid():
+                updated_option = duty_option_form.save()
+                messages.success(request, f"Updated colors for duty option '{updated_option.label}'.")
+                return redirect(f"{reverse('employees:self_service_weekly_schedule')}?week={selected_week_start.isoformat()}")
+            import_form = BranchWeeklyScheduleImportForm()
+            messages.error(request, f"Please review the color settings for '{duty_option.label}'.")
+
+        if action == "update_duty_option_timing":
+            duty_option = get_object_or_404(
+                BranchWeeklyDutyOption,
+                pk=request.POST.get("duty_option_id"),
+                branch=branch,
+            )
+            duty_option_form = BranchWeeklyDutyOptionTimingForm(request.POST, instance=duty_option)
+            if duty_option_form.is_valid():
+                updated_option = duty_option_form.save()
+                BranchWeeklyScheduleEntry.objects.filter(
+                    branch=branch,
+                    duty_option=updated_option,
+                    week_start=selected_week_start,
+                ).update(
+                    start_time=updated_option.default_start_time,
+                    end_time=updated_option.default_end_time,
+                    updated_by=get_actor_label(request.user),
+                )
+                messages.success(request, f"Updated timing for duty option '{updated_option.label}'.")
+                return redirect(f"{reverse('employees:self_service_weekly_schedule')}?week={selected_week_start.isoformat()}")
+            import_form = BranchWeeklyScheduleImportForm()
+            messages.error(request, f"Please review the timing for '{duty_option.label}'.")
+
+        if action == "update_schedule_theme":
+            schedule_theme, _created = BranchWeeklyScheduleTheme.objects.get_or_create(branch=branch)
+            schedule_theme_form = BranchWeeklyScheduleThemeForm(request.POST, instance=schedule_theme)
+            if schedule_theme_form.is_valid():
+                schedule_theme_form.save()
+                messages.success(request, "Updated schedule table colors.")
+                return redirect(f"{reverse('employees:self_service_weekly_schedule')}?week={selected_week_start.isoformat()}")
+            import_form = BranchWeeklyScheduleImportForm()
+            messages.error(request, "Please review the schedule table colors.")
+
+        if action == "update_employee_order":
+            active_employee_ids = [
+                employee_id
+                for employee_id in request.POST.getlist("ordered_employee_ids")
+                if employee_id and employee_id.isdigit()
+            ]
+            seen_ids = set()
+            ordered_ids = []
+            for employee_id in active_employee_ids:
+                if employee_id not in seen_ids:
+                    ordered_ids.append(int(employee_id))
+                    seen_ids.add(employee_id)
+
+            branch_employees = {
+                member.id: member
+                for member in Employee.objects.filter(branch=branch, is_active=True)
+            }
+            fallback_ids = [member_id for member_id in branch_employees.keys() if member_id not in ordered_ids]
+            final_order_ids = ordered_ids + sorted(
+                fallback_ids,
+                key=lambda member_id: (
+                    branch_employees[member_id].full_name.lower(),
+                    branch_employees[member_id].employee_id.lower(),
+                ),
+            )
+
+            for index, employee_id in enumerate(final_order_ids, start=1):
+                BranchScheduleGridRow.objects.update_or_create(
+                    branch=branch,
+                    row_index=index,
+                    defaults={"employee_id": employee_id},
+                )
+            messages.success(request, "Updated employee row order for the schedule table.")
+            return redirect(f"{reverse('employees:self_service_weekly_schedule')}?week={selected_week_start.isoformat()}")
 
     previous_week_start = selected_week_start - timedelta(days=7)
     next_week_start = selected_week_start + timedelta(days=7)
@@ -3113,9 +3643,52 @@ def self_service_weekly_schedule_page(request):
     context["selected_week_start"] = selected_week_start
     context["previous_week_start"] = previous_week_start
     context["next_week_start"] = next_week_start
+    context["today"] = timezone.localdate()
     context["can_manage_branch_weekly_schedule"] = can_manage_schedule
-    context.update(build_branch_schedule_free_grid(branch))
+    context.update(build_employee_schedule_snapshot(employee))
+    context["schedule_import_form"] = import_form
+    schedule_theme, _created = BranchWeeklyScheduleTheme.objects.get_or_create(branch=branch)
+    context["schedule_theme"] = schedule_theme
+    context["schedule_theme_form"] = BranchWeeklyScheduleThemeForm(instance=schedule_theme)
+    context["duty_option_style_forms"] = [
+        {
+            "option": duty_option,
+            "style_form": BranchWeeklyDutyOptionStyleForm(instance=duty_option),
+            "timing_form": BranchWeeklyDutyOptionTimingForm(instance=duty_option),
+        }
+        for duty_option in BranchWeeklyDutyOption.objects.filter(branch=branch, is_active=True).order_by("display_order", "label", "id")
+    ]
+    context["employee_order_rows"] = [
+        {"employee": row["employee"], "position": forloop_index}
+        for forloop_index, row in enumerate(context.get("team_schedule_rows", []), start=1)
+        if row.get("employee")
+    ]
     return render(request, "employees/self_service_weekly_schedule.html", context)
+
+
+@login_required
+def self_service_my_schedule_page(request):
+    employee = get_user_employee_profile(request.user)
+    if employee is None:
+        raise PermissionDenied("No employee profile is connected to this account.")
+    if not can_view_employee_profile(request.user, employee):
+        return deny_employee_access(
+            request,
+            "You do not have permission to view this employee profile.",
+            employee=employee,
+        )
+    if not can_view_branch_self_service(employee):
+        messages.error(request, "This employee is not linked to any branch yet.")
+        return redirect("employees:self_service_profile")
+
+    context = build_self_service_page_context(
+        request,
+        employee,
+        current_section="my_schedule",
+    )
+    context.update(build_employee_schedule_snapshot(employee))
+    context["branch"] = employee.branch
+    return render(request, "employees/self_service_my_schedule.html", context)
 
 
 @login_required
@@ -3159,6 +3732,7 @@ def self_service_attendance_page(request):
                     attendance_event.check_in_latitude = form.cleaned_data.get("latitude")
                     attendance_event.check_in_longitude = form.cleaned_data.get("longitude")
                     attendance_event.check_in_location_label = location_label
+                    attendance_event.check_in_address = form.cleaned_data.get("location_address") or ""
                     attendance_event.notes = form.cleaned_data.get("notes") or ""
                     attendance_event.status = EmployeeAttendanceEvent.STATUS_OPEN
                     attendance_event.save()
@@ -3173,6 +3747,7 @@ def self_service_attendance_page(request):
                     attendance_event.check_out_latitude = form.cleaned_data.get("latitude")
                     attendance_event.check_out_longitude = form.cleaned_data.get("longitude")
                     attendance_event.check_out_location_label = location_label
+                    attendance_event.check_out_address = form.cleaned_data.get("location_address") or ""
                     if form.cleaned_data.get("notes"):
                         attendance_event.notes = form.cleaned_data["notes"]
                     attendance_event.status = EmployeeAttendanceEvent.STATUS_COMPLETED

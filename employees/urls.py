@@ -47,6 +47,7 @@ from .views import (
     self_service_profile_page,
     self_service_attendance_page,
     self_service_branch_page,
+    self_service_my_schedule_page,
     self_service_weekly_schedule_page,
     self_service_leave_page,
     self_service_working_time_page,
@@ -66,6 +67,7 @@ urlpatterns = [
     path("self-service/attendance/", self_service_attendance_page, name="self_service_attendance"),
     path("self-service/working-time/", self_service_working_time_page, name="self_service_working_time"),
     path("self-service/branch/", self_service_branch_page, name="self_service_branch"),
+    path("self-service/my-schedule/", self_service_my_schedule_page, name="self_service_my_schedule"),
     path("self-service/branch/weekly-schedule/", self_service_weekly_schedule_page, name="self_service_weekly_schedule"),
 
     # Current AJAX endpoints

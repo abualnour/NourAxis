@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ post.title }} | {{ post.branch.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+<link rel="stylesheet" href="{% static 'css/operations.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="branch-workspace-page branch-post-detail-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">{{ post.title }}</h1>
+            <p class="page-subtitle">{{ post.branch.name }} · {{ post.get_post_type_display }} · {{ post.get_status_display }}</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{% if self_service_branch_url %}{{ self_service_branch_url }}{% else %}{% url 'operations:branch_workspace_detail' post.branch_id %}{% endif %}">Back To Branch</a>
+            {% if post_card.detail_url %}
+                <a class="btn btn-secondary" href="{{ post_card.detail_url }}">Refresh</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="branch-workspace-layout">
+        <section class="branch-workspace-main">
+            <article class="card modern-soft-card branch-workspace-panel branch-post-detail-card">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>{{ post.get_post_type_display }}</h2>
+                            <p class="page-subtitle">Created by {{ post.author_display }} on {{ post.created_at|date:"F j, Y g:i a" }}</p>
+                        </div>
+                        <div class="branch-post-badge-row">
+                            <span class="badge badge-light">{{ post.get_status_display }}</span>
+                            {% if post.priority %}<span class="badge badge-warning">{{ post.get_priority_display }}</span>{% endif %}
+                            {% if post.is_pinned %}<span class="badge badge-primary">Pinned</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="branch-post-body">
+                        <p>{{ post.body|linebreaksbr }}</p>
+                    </div>
+
+                    <div class="workspace-kpi-grid">
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Assignee</span>
+                            <strong>{{ post_card.assignee_label|default:"Not assigned" }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Due Date</span>
+                            <strong>{% if post.due_date %}{{ post.due_date|date:"F j, Y" }}{% else %}-{% endif %}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Replies</span>
+                            <strong>{{ post.replies.count }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Acknowledgements</span>
+                            <strong>{{ post.acknowledgements.count }}</strong>
+                        </div>
+                    </div>
+
+                    {% if post.attachment %}
+                        <div class="workspace-inline-actions">
+                            <a class="btn btn-light" href="{{ post.attachment.url }}" target="_blank" rel="noopener">Open Attachment</a>
+                        </div>
+                    {% endif %}
+
+                    <div class="branch-post-replies">
+                        <h3>Replies</h3>
+                        {% if post.replies.all %}
+                            <div class="branch-reply-list">
+                                {% for reply in post.replies.all %}
+                                    <article class="branch-reply-card">
+                                        <div class="branch-reply-head">
+                                            <strong>{{ reply.author_display }}</strong>
+                                            <span>{{ reply.created_at|date:"M j, Y g:i a" }}</span>
+                                        </div>
+                                        <p>{{ reply.body|linebreaksbr }}</p>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <h3>No replies yet</h3>
+                                <p>This branch post has not received any follow-up replies yet.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+
+            {% if can_reply_branch_post %}
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>Add Reply</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'operations:branch_post_reply_create' post.id %}" class="workspace-form">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                {{ reply_form.body.label_tag }}
+                                {{ reply_form.body }}
+                                {{ reply_form.body.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Post Reply</button>
+                            </div>
+                        </form>
+                    </div>
+                </article>
+            {% endif %}
+        </section>
+
+        <aside class="branch-workspace-side">
+            {% if can_manage_branch_post or can_update_assigned_branch_post %}
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>Workflow Actions</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-action-list">
+                            {% for value,label in post.STATUS_CHOICES %}
+                                {% if can_manage_branch_post or value == "open" or value == "in_progress" or value == "done" %}
+                                    <form method="post" action="{% url 'operations:branch_post_status_update' post.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="target_status" value="{{ value }}">
+                                        <button type="submit" class="btn btn-light branch-status-action">{{ label }}</button>
+                                    </form>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+            {% elif can_acknowledge_branch_post and not has_acknowledged_post %}
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>Acknowledgement</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'operations:branch_post_acknowledge' post.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary">Acknowledge Update</button>
+                        </form>
+                    </div>
+                </article>
+            {% endif %}
+
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Activity Log</h2>
+                </div>
+                <div class="card-body">
+                    {% if post.actions.all %}
+                        <div class="workspace-timeline">
+                            {% for action in post.actions.all %}
+                                <div class="workspace-timeline-item">
+                                    <strong>{{ action.get_action_type_display }}</strong>
+                                    <span>{{ action.actor_display }}</span>
+                                    <small>{{ action.created_at|date:"M j, Y g:i a" }}</small>
+                                    {% if action.note %}<p>{{ action.note }}</p>{% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No activity log yet</h3>
+                            <p>Workflow events will appear here as the post moves forward.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </aside>
+    </div>
+</div>
+{% endblock %}

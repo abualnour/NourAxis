@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ branch.name }} Workspace{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+<link rel="stylesheet" href="{% static 'css/operations.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="branch-workspace-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">{{ branch.name }} Workspace</h1>
+            <p class="page-subtitle">Operational branch control center with schedule visibility, announcements, task flow, and structured discussion.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{% url 'employees:employee_list' %}?branch={{ branch.id }}">Team Directory</a>
+            <a class="btn btn-secondary" href="{% url 'employees:self_service_weekly_schedule' %}?week={{ branch_workspace_selected_week_start|date:'Y-m-d' }}">Weekly Schedule</a>
+        </div>
+    </div>
+
+    {% include "operations/includes/branch_workspace_content.html" with branch_workspace_is_self_service=False %}
+</div>
+{% endblock %}

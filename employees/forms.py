@@ -9,6 +9,7 @@ from django.utils import timezone
 from organization.models import Branch, Company, Department, JobTitle, Section
 
 from .models import (
+    BranchWeeklyScheduleTheme,
     BranchWeeklyDutyOption,
     BranchWeeklyScheduleEntry,
     BranchWeeklyPendingOff,
@@ -996,13 +997,26 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
         choices=EmployeeAttendanceLedger.SHIFT_CHOICES,
         label="Shift",
     )
-    location_label = forms.CharField(required=False, max_length=255, label="Location Label")
-    city = forms.CharField(required=False, max_length=120, label="City")
-    street = forms.CharField(required=False, max_length=120, label="Street")
-    block = forms.CharField(required=False, max_length=120, label="Block")
-    building_number = forms.CharField(required=False, max_length=120, label="Building Number")
-    latitude = forms.DecimalField(required=False, max_digits=9, decimal_places=6, label="Latitude")
-    longitude = forms.DecimalField(required=False, max_digits=9, decimal_places=6, label="Longitude")
+    location_label = forms.CharField(required=False, max_length=255, label="Location Note")
+    location_address = forms.CharField(
+        required=False,
+        label="Selected Map Address",
+        widget=forms.Textarea(attrs={"rows": 2, "readonly": "readonly"}),
+    )
+    latitude = forms.DecimalField(
+        required=False,
+        max_digits=9,
+        decimal_places=6,
+        label="Latitude",
+        widget=forms.HiddenInput(),
+    )
+    longitude = forms.DecimalField(
+        required=False,
+        max_digits=9,
+        decimal_places=6,
+        label="Longitude",
+        widget=forms.HiddenInput(),
+    )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Optional duty note for today."}),
@@ -1014,12 +1028,10 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
         for field_name, field in self.fields.items():
             widget = field.widget
             existing = widget.attrs.get("class", "")
-            field.widget.attrs["class"] = f"{existing} form-control".strip()
-        self.fields["location_label"].widget.attrs["placeholder"] = "Work site, office, or landmark"
-        self.fields["city"].widget.attrs["placeholder"] = "Example: Kuwait City"
-        self.fields["street"].widget.attrs["placeholder"] = "Street name"
-        self.fields["block"].widget.attrs["placeholder"] = "Block"
-        self.fields["building_number"].widget.attrs["placeholder"] = "Building / office number"
+            if not isinstance(widget, forms.HiddenInput):
+                field.widget.attrs["class"] = f"{existing} form-control".strip()
+        self.fields["location_label"].widget.attrs["placeholder"] = "Optional landmark, gate, or branch note"
+        self.fields["location_address"].widget.attrs["placeholder"] = "Select a point from the live map or use your current location"
 
     def clean_notes(self):
         return (self.cleaned_data.get("notes") or "").strip()
@@ -1027,17 +1039,21 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
     def clean_location_label(self):
         return (self.cleaned_data.get("location_label") or "").strip()
 
-    def clean_city(self):
-        return (self.cleaned_data.get("city") or "").strip()
+    def clean_location_address(self):
+        return (self.cleaned_data.get("location_address") or "").strip()
 
-    def clean_street(self):
-        return (self.cleaned_data.get("street") or "").strip()
+    def clean(self):
+        cleaned_data = super().clean()
+        latitude = cleaned_data.get("latitude")
+        longitude = cleaned_data.get("longitude")
 
-    def clean_block(self):
-        return (self.cleaned_data.get("block") or "").strip()
+        if (latitude is None) != (longitude is None):
+            raise forms.ValidationError("Both latitude and longitude are required when selecting a map location.")
 
-    def clean_building_number(self):
-        return (self.cleaned_data.get("building_number") or "").strip()
+        if latitude is None or longitude is None:
+            raise forms.ValidationError("Use the live map or your current location before saving attendance.")
+
+        return cleaned_data
 
 
 class EmployeeHistoryForm(forms.ModelForm):
@@ -1338,12 +1354,16 @@ class BranchWeeklyDutyOptionForm(forms.ModelForm):
             "duty_type",
             "default_start_time",
             "default_end_time",
+            "background_color",
+            "text_color",
             "display_order",
             "is_active",
         ]
         widgets = {
             "default_start_time": forms.TimeInput(attrs={"type": "time"}),
             "default_end_time": forms.TimeInput(attrs={"type": "time"}),
+            "background_color": forms.TextInput(attrs={"type": "color"}),
+            "text_color": forms.TextInput(attrs={"type": "color"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -1356,12 +1376,77 @@ class BranchWeeklyDutyOptionForm(forms.ModelForm):
                 existing = widget.attrs.get("class", "")
                 widget.attrs["class"] = f"{existing} form-control".strip()
         self.fields["label"].widget.attrs.setdefault("placeholder", "Example: 2 pm to 10 pm")
+        self.fields["background_color"].widget.attrs.setdefault("value", "#2563eb")
+        self.fields["text_color"].widget.attrs.setdefault("value", "#f8fafc")
 
     def clean_label(self):
         label = (self.cleaned_data.get("label") or "").strip()
         if not label:
             raise forms.ValidationError("Duty option label is required.")
         return label
+
+
+class BranchWeeklyDutyOptionStyleForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyDutyOption
+        fields = ["background_color", "text_color"]
+        widgets = {
+            "background_color": forms.TextInput(attrs={"type": "color"}),
+            "text_color": forms.TextInput(attrs={"type": "color"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            existing = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{existing} form-control".strip()
+
+
+class BranchWeeklyDutyOptionTimingForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyDutyOption
+        fields = ["default_start_time", "default_end_time"]
+        widgets = {
+            "default_start_time": forms.TimeInput(attrs={"type": "time"}),
+            "default_end_time": forms.TimeInput(attrs={"type": "time"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            existing = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{existing} form-control".strip()
+
+
+class BranchWeeklyScheduleThemeForm(forms.ModelForm):
+    class Meta:
+        model = BranchWeeklyScheduleTheme
+        fields = [
+            "employee_column_bg",
+            "employee_column_text",
+            "job_title_column_bg",
+            "job_title_column_text",
+            "pending_off_column_bg",
+            "pending_off_column_text",
+            "day_header_bg",
+            "day_header_text",
+        ]
+        widgets = {
+            "employee_column_bg": forms.TextInput(attrs={"type": "color"}),
+            "employee_column_text": forms.TextInput(attrs={"type": "color"}),
+            "job_title_column_bg": forms.TextInput(attrs={"type": "color"}),
+            "job_title_column_text": forms.TextInput(attrs={"type": "color"}),
+            "pending_off_column_bg": forms.TextInput(attrs={"type": "color"}),
+            "pending_off_column_text": forms.TextInput(attrs={"type": "color"}),
+            "day_header_bg": forms.TextInput(attrs={"type": "color"}),
+            "day_header_text": forms.TextInput(attrs={"type": "color"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            existing = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{existing} form-control".strip()
 
 
 class BranchWeeklyPendingOffForm(forms.ModelForm):
@@ -1395,6 +1480,39 @@ class BranchWeeklyPendingOffForm(forms.ModelForm):
         if self.branch is not None and employee and employee.branch_id != self.branch.id:
             self.add_error("employee", "Selected employee must belong to this branch.")
         return cleaned_data
+
+
+class BranchWeeklyScheduleImportForm(forms.Form):
+    import_file = forms.FileField(
+        label="Google Sheet / Excel File",
+        help_text="Upload an .xlsx or .csv file exported from Google Sheets or Excel.",
+    )
+    replace_existing = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Replace current week entries before import",
+        help_text="Keep this checked for a full week replacement. If unchecked, the import only updates non-empty cells and leaves the current sheet in place.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "form-check-input"
+            else:
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = f"{existing} form-control".strip()
+
+    def clean_import_file(self):
+        uploaded_file = self.cleaned_data.get("import_file")
+        if not uploaded_file:
+            return uploaded_file
+
+        filename = (uploaded_file.name or "").lower()
+        if not (filename.endswith(".xlsx") or filename.endswith(".csv")):
+            raise forms.ValidationError("Only .xlsx and .csv files are supported for schedule import.")
+        return uploaded_file
 
 
 class AttendanceFilterForm(forms.Form):

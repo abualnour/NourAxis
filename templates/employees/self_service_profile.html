@@ -18,6 +18,7 @@
             {% if self_service_branch_url %}
                 <a class="btn btn-light" href="{{ self_service_branch_url }}">My Branch</a>
             {% endif %}
+            <a class="btn btn-light" href="{{ self_service_my_schedule_url }}">My Schedule</a>
             <a class="btn btn-secondary" href="{{ self_service_attendance_url }}">Attendance</a>
             <a class="btn btn-primary" href="{{ self_service_leave_url }}">Leave</a>
         </div>
@@ -123,6 +124,7 @@
                     </div>
                     <div class="page-actions self-service-balance-actions">
                         <a class="btn btn-light" href="{{ self_service_documents_url }}">Open Documents</a>
+                        <a class="btn btn-light" href="{{ self_service_my_schedule_url }}">Open My Schedule</a>
                         <a class="btn btn-light" href="{{ self_service_working_time_url }}">Working Time Summary</a>
                         {% if self_service_weekly_schedule_url %}
                             <a class="btn btn-light" href="{{ self_service_weekly_schedule_url }}">Weekly Schedule</a>

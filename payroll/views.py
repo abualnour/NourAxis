@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 
-from employees.models import Employee
+from employees.models import Employee, EmployeeAttendanceLedger
 
 from .forms import PayrollAdjustmentForm, PayrollLineForm, PayrollLineGenerationForm, PayrollObligationForm, PayrollPeriodForm
 from .models import PayrollAdjustment, PayrollLine, PayrollObligation, PayrollPeriod, PayrollProfile
@@ -34,6 +34,35 @@ def build_payroll_lines_for_period(payroll_period):
     )
 
     for profile in profiles:
+        attendance_entries = list(
+            EmployeeAttendanceLedger.objects.filter(
+                employee=profile.employee,
+                attendance_date__gte=payroll_period.period_start,
+                attendance_date__lte=payroll_period.period_end,
+            ).order_by("attendance_date", "id")
+        )
+        overtime_minutes = sum(entry.overtime_minutes or 0 for entry in attendance_entries)
+        punctuality_minutes = sum(
+            (entry.late_minutes or 0) + (entry.early_departure_minutes or 0)
+            for entry in attendance_entries
+        )
+        geo_verified_days = sum(
+            1
+            for entry in attendance_entries
+            if entry.check_in_latitude is not None and entry.check_in_longitude is not None
+        )
+        payroll_note_parts = [f"Generated from payroll profile for {profile.employee.full_name}."]
+        if attendance_entries:
+            payroll_note_parts.append(f"Attendance rows linked: {len(attendance_entries)} day(s).")
+        if overtime_minutes:
+            payroll_note_parts.append(
+                f"Overtime logged: {(Decimal(overtime_minutes) / Decimal('60')).quantize(Decimal('0.01'))} hour(s)."
+            )
+        if punctuality_minutes:
+            payroll_note_parts.append(f"Late / early minutes logged: {punctuality_minutes} minute(s).")
+        if geo_verified_days:
+            payroll_note_parts.append(f"Map location captured on {geo_verified_days} attendance day(s).")
+
         allowances = (profile.housing_allowance or Decimal("0.00")) + (profile.transport_allowance or Decimal("0.00"))
         deductions = profile.fixed_deduction or Decimal("0.00")
         net_pay = (profile.base_salary or Decimal("0.00")) + allowances - deductions
@@ -47,7 +76,7 @@ def build_payroll_lines_for_period(payroll_period):
                 "deductions": deductions,
                 "overtime_amount": Decimal("0.00"),
                 "net_pay": net_pay,
-                "notes": f"Generated from payroll profile for {profile.employee.full_name}.",
+                "notes": " ".join(payroll_note_parts),
             },
         )
         if created:

@@ -1,5 +1,14 @@
 from django.urls import reverse
 
+from employees.access import (
+    get_user_scope_branch as get_user_scope_branch_for_nav,
+    get_workspace_profile_url,
+    is_admin_compatible as is_admin_compatible_role,
+    is_employee_role_user as is_employee_role_user_role,
+    is_hr_user as is_hr_user_role,
+    is_operations_manager_user as is_operations_manager_user_role,
+    is_supervisor_user as is_supervisor_user_role,
+)
 from employees.models import Employee
 
 
@@ -33,6 +42,7 @@ def navbar_context(request):
             "nav_self_service_attendance_url": "",
             "nav_self_service_working_time_url": "",
             "nav_self_service_branch_url": "",
+            "nav_self_service_my_schedule_url": "",
             "nav_self_service_weekly_schedule_url": "",
             "nav_can_view_hr_workspace": False,
             "nav_can_view_payroll_workspace": False,
@@ -40,18 +50,11 @@ def navbar_context(request):
             "nav_payroll_workspace_url": "",
         }
 
-    role_value = (getattr(user, "role", "") or "").strip().lower()
-    is_admin_compatible = bool(
-        getattr(user, "is_superuser", False)
-        or (
-            getattr(user, "is_staff", False)
-            and role_value not in {"hr", "supervisor", "operations_manager", "employee"}
-        )
-    )
-    is_hr_user = bool(getattr(user, "is_hr", False))
-    is_supervisor_user = bool(getattr(user, "is_supervisor", False))
-    is_operations_manager_user = bool(getattr(user, "is_operations_manager", False))
-    is_employee_role_user = bool(getattr(user, "is_employee_role", False))
+    is_admin_compatible = is_admin_compatible_role(user)
+    is_hr_user = is_hr_user_role(user)
+    is_supervisor_user = is_supervisor_user_role(user)
+    is_operations_manager_user = is_operations_manager_user_role(user)
+    is_employee_role_user = is_employee_role_user_role(user)
 
     employee_profile = (
         Employee.objects.filter(user=user)
@@ -59,14 +62,7 @@ def navbar_context(request):
         .first()
     )
 
-    nav_scoped_branch = None
-    if (
-        is_supervisor_user
-        and not is_admin_compatible
-        and not is_hr_user
-        and not is_operations_manager_user
-    ):
-        nav_scoped_branch = getattr(employee_profile, "branch", None)
+    nav_scoped_branch = get_user_scope_branch_for_nav(user, employee_profile)
 
     show_supervisor_workspace = bool(nav_scoped_branch is not None and employee_profile)
     show_operations_workspace = bool(is_operations_manager_user and employee_profile)
@@ -82,8 +78,11 @@ def navbar_context(request):
     if show_supervisor_workspace:
         primary_home_url = ("employees:self_service_profile", None)
         primary_home_label = "My Supervisor Workspace"
+    elif employee_profile and is_hr_user:
+        primary_home_url = ("employees:employee_detail", {"pk": employee_profile.pk})
+        primary_home_label = "My HR Workspace"
     elif show_operations_workspace:
-        primary_home_url = ("employees:self_service_profile", None)
+        primary_home_url = ("employees:employee_detail", {"pk": employee_profile.pk})
         primary_home_label = "My Operations Workspace"
     elif employee_profile and is_employee_role_user:
         primary_home_url = ("employees:self_service_profile", None)
@@ -111,21 +110,17 @@ def navbar_context(request):
     nav_self_service_attendance_url = ""
     nav_self_service_working_time_url = ""
     nav_self_service_branch_url = ""
+    nav_self_service_my_schedule_url = ""
     nav_self_service_weekly_schedule_url = ""
 
     if employee_profile:
-        if is_admin_compatible or is_hr_user or is_operations_manager_user:
-            nav_self_service_profile_url = reverse(
-                "employees:employee_detail",
-                kwargs={"pk": employee_profile.pk},
-            )
-        else:
-            nav_self_service_profile_url = reverse("employees:self_service_profile")
+        nav_self_service_profile_url = get_workspace_profile_url(user, employee_profile)
 
         nav_self_service_leave_url = reverse("employees:self_service_leave")
         nav_self_service_documents_url = reverse("employees:self_service_documents")
         nav_self_service_attendance_url = reverse("employees:self_service_attendance")
         nav_self_service_working_time_url = reverse("employees:self_service_working_time")
+        nav_self_service_my_schedule_url = reverse("employees:self_service_my_schedule")
 
         if getattr(employee_profile, "branch_id", None):
             nav_self_service_branch_url = reverse("employees:self_service_branch")
@@ -180,6 +175,7 @@ def navbar_context(request):
         "nav_self_service_attendance_url": nav_self_service_attendance_url,
         "nav_self_service_working_time_url": nav_self_service_working_time_url,
         "nav_self_service_branch_url": nav_self_service_branch_url,
+        "nav_self_service_my_schedule_url": nav_self_service_my_schedule_url,
         "nav_self_service_weekly_schedule_url": nav_self_service_weekly_schedule_url,
         "nav_can_view_hr_workspace": bool(
             is_admin_compatible or is_hr_user or is_operations_manager_user or nav_scoped_branch is not None

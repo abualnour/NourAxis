@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}My Schedule | {{ employee.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+<link rel="stylesheet" href="{% static 'css/operations.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="employee-profile-page self-service-hub-page my-schedule-page">
+    <div class="page-header employee-profile-header">
+        <div>
+            <h1 class="page-title">My Schedule</h1>
+            <p class="page-subtitle">Your personal branch schedule from the official weekly branch plan, including today, this week, and next week.</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
+            <a class="btn btn-light" href="{{ self_service_branch_url }}">My Branch</a>
+            <a class="btn btn-secondary" href="{{ self_service_weekly_schedule_url }}">Weekly Schedule</a>
+        </div>
+    </div>
+
+    <div class="self-service-shell">
+        <div class="branch-workspace-hero-grid">
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Today</h2>
+                </div>
+                <div class="card-body">
+                    {% if my_schedule_today_entry %}
+                        <div class="schedule-focus-card">
+                            <span class="branch-post-meta">{{ my_schedule_today_entry.schedule_date|date:"l, F j, Y" }}</span>
+                            <h3>{{ my_schedule_today_label }}</h3>
+                            <div class="workspace-kpi-grid schedule-kpi-grid">
+                                <div class="workspace-kpi">
+                                    <span class="workspace-kpi-label">Duty Type</span>
+                                    <strong>{{ my_schedule_today_entry.get_duty_type_display }}</strong>
+                                </div>
+                                <div class="workspace-kpi">
+                                    <span class="workspace-kpi-label">Status</span>
+                                    <strong>{{ my_schedule_today_entry.get_status_display }}</strong>
+                                </div>
+                                <div class="workspace-kpi">
+                                    <span class="workspace-kpi-label">Start</span>
+                                    <strong>{% if my_schedule_today_entry.start_time %}{{ my_schedule_today_entry.start_time|time:"g:i a" }}{% else %}-{% endif %}</strong>
+                                </div>
+                                <div class="workspace-kpi">
+                                    <span class="workspace-kpi-label">End</span>
+                                    <strong>{% if my_schedule_today_entry.end_time %}{{ my_schedule_today_entry.end_time|time:"g:i a" }}{% else %}-{% endif %}</strong>
+                                </div>
+                            </div>
+                            {% if my_schedule_today_entry.order_note %}
+                                <div class="branch-post-body">
+                                    <strong>Order Note</strong>
+                                    <p>{{ my_schedule_today_entry.order_note|linebreaksbr }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No schedule for today</h3>
+                            <p>Your branch has not assigned a schedule entry for today yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Quick Access</h2>
+                </div>
+                <div class="card-body">
+                    <div class="workspace-kpi-grid schedule-kpi-grid">
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Branch</span>
+                            <strong>{{ employee_display_branch|default:"-" }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">This Week</span>
+                            <strong>{% if my_schedule_this_week_start %}{{ my_schedule_this_week_start|date:"M j" }}{% endif %}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">This Week Entries</span>
+                            <strong>{{ my_schedule_this_week_entries|length }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Next Week Entries</span>
+                            <strong>{{ my_schedule_next_week_entries|length }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </div>
+
+        <div class="branch-workspace-layout">
+            <section class="branch-workspace-main">
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>This Week</h2>
+                    </div>
+                    <div class="card-body">
+                        {% if my_schedule_this_week_entries %}
+                            <div class="schedule-entry-list">
+                                {% for entry in my_schedule_this_week_entries %}
+                                    <div class="schedule-entry-card">
+                                        <div class="schedule-entry-head">
+                                            <div>
+                                                <strong>{{ entry.schedule_date|date:"l" }}</strong>
+                                                <span>{{ entry.schedule_date|date:"F j, Y" }}</span>
+                                            </div>
+                                            <span class="badge badge-light">{{ entry.get_status_display }}</span>
+                                        </div>
+                                        <div class="schedule-entry-grid">
+                                            <div><span>Shift</span><strong>{% if entry.shift_label %}{{ entry.shift_label }}{% elif entry.duty_option %}{{ entry.duty_option.label }}{% elif entry.title %}{{ entry.title }}{% else %}{{ entry.get_duty_type_display }}{% endif %}</strong></div>
+                                            <div><span>Duty</span><strong>{{ entry.get_duty_type_display }}</strong></div>
+                                            <div><span>Start</span><strong>{% if entry.start_time %}{{ entry.start_time|time:"g:i a" }}{% else %}-{% endif %}</strong></div>
+                                            <div><span>End</span><strong>{% if entry.end_time %}{{ entry.end_time|time:"g:i a" }}{% else %}-{% endif %}</strong></div>
+                                        </div>
+                                        {% if entry.order_note %}
+                                            <p class="schedule-entry-note">{{ entry.order_note }}</p>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <h3>No entries this week</h3>
+                                <p>Your schedule for the current week has not been published yet.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </article>
+            </section>
+
+            <aside class="branch-workspace-side">
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>Next Week</h2>
+                    </div>
+                    <div class="card-body">
+                        {% if my_schedule_next_week_entries %}
+                            <div class="schedule-side-list">
+                                {% for entry in my_schedule_next_week_entries %}
+                                    <div class="schedule-side-item">
+                                        <strong>{{ entry.schedule_date|date:"D, M j" }}</strong>
+                                        <span>{% if entry.shift_label %}{{ entry.shift_label }}{% elif entry.duty_option %}{{ entry.duty_option.label }}{% elif entry.title %}{{ entry.title }}{% else %}{{ entry.get_duty_type_display }}{% endif %}</span>
+                                        <small>{% if entry.start_time and entry.end_time %}{{ entry.start_time|time:"g:i a" }} to {{ entry.end_time|time:"g:i a" }}{% else %}{{ entry.get_status_display }}{% endif %}</small>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <h3>No next-week plan yet</h3>
+                                <p>Next week will appear here once the branch schedule is prepared.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </article>
+            </aside>
+        </div>
+    </div>
+</div>
+{% endblock %}

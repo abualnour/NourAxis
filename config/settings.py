@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "accounts",
     "organization",
     "employees",
+    "operations",
     "hr",
     "payroll",
 ]
@@ -174,6 +175,7 @@ HR_BACKUP_INCLUDE_PATHS = [
     "manage.py",
     "media",
     "employees",
+    "operations",
     "organization",
     "accounts",
     "core",

@@ -5,158 +5,397 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/employees.css' %}">
+<link rel="stylesheet" href="{% static 'css/operations.css' %}">
 {% endblock %}
 
 {% block content %}
 <div class="employee-profile-page self-service-hub-page branch-schedule-page">
     <div class="page-header employee-profile-header">
         <div>
-            <h1 class="page-title">{{ employee_display_branch|default:"Branch" }} Weekly Schedule</h1>
-            <p class="page-subtitle">One day per column with shift boxes like a real roster, plus side columns for branch notes, orders, and follow-up.</p>
+            <h1 class="page-title">{{ employee_display_branch|default:"Branch" }} Schedule Board</h1>
+            <p class="page-subtitle">Official branch schedule view with Google Sheets and Excel import/export support, while keeping the app database as the source of truth.</p>
         </div>
         <div class="page-actions">
             <a class="btn btn-light" href="{{ self_service_branch_url }}">My Branch</a>
-            {% if can_manage_branch_weekly_schedule %}
-                <button class="btn btn-primary" form="free-schedule-grid-form" type="submit">Save Roster</button>
-            {% endif %}
+            <a class="btn btn-light" href="{{ self_service_my_schedule_url }}">My Schedule</a>
         </div>
     </div>
 
     <div class="self-service-shell">
-        <div class="card detail-card modern-soft-card branch-compact-panel">
+        <div class="branch-workspace-hero-grid">
+            <article class="card detail-card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>Week Control</h2>
+                            <p class="page-subtitle">Current branch week overview and direct navigation.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="workspace-kpi-grid schedule-kpi-grid">
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Week Start</span>
+                            <strong>{{ selected_week_start|date:"F j, Y" }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Week End</span>
+                            <strong>{{ week_end|date:"F j, Y" }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Scheduled Rows</span>
+                            <strong>{{ schedule_total }}</strong>
+                        </div>
+                        <div class="workspace-kpi">
+                            <span class="workspace-kpi-label">Completed</span>
+                            <strong>{{ completed_total }}</strong>
+                        </div>
+                    </div>
+                    <div class="workspace-inline-actions branch-schedule-toolbar">
+                        <a class="btn btn-light" href="?week={{ previous_week_start|date:'Y-m-d' }}">Previous Week</a>
+                        <a class="btn btn-light" href="?week={{ next_week_start|date:'Y-m-d' }}">Next Week</a>
+                        <a class="btn btn-secondary" href="?week={{ today|default:selected_week_start|date:'Y-m-d' }}">Current Week</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card detail-card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <div class="section-heading">
+                        <div>
+                            <h2>My Today Schedule</h2>
+                            <p class="page-subtitle">Personal daily view from the same published branch records.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if my_schedule_today_entry %}
+                        <div class="schedule-side-item">
+                            <strong>{{ my_schedule_today_entry.schedule_date|date:"l, M j" }}</strong>
+                            <span>{{ my_schedule_today_label }}</span>
+                            <small>{% if my_schedule_today_entry.start_time and my_schedule_today_entry.end_time %}{{ my_schedule_today_entry.start_time|time:"g:i a" }} to {{ my_schedule_today_entry.end_time|time:"g:i a" }}{% else %}{{ my_schedule_today_entry.get_status_display }}{% endif %}</small>
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No schedule assigned today</h3>
+                            <p>Your branch has not published a personal row for today yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+
+        {% if can_manage_branch_weekly_schedule %}
+            <div class="branch-workspace-layout">
+                <section class="branch-workspace-main">
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <div class="section-heading">
+                                <div>
+                                    <h2>Import From Google Sheets / Excel</h2>
+                                    <p class="page-subtitle">Export a template, edit it in Google Sheets, then import it back into this branch week.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data" class="workspace-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="schedule_action" value="import_schedule">
+                                <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                <div class="workspace-form-grid">
+                                    <div class="form-group form-group-full">
+                                        {{ schedule_import_form.import_file.label_tag }}
+                                        {{ schedule_import_form.import_file }}
+                                        {{ schedule_import_form.import_file.errors }}
+                                        {% if schedule_import_form.import_file.help_text %}
+                                            <small class="form-help">{{ schedule_import_form.import_file.help_text }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="form-group form-check">
+                                        {{ schedule_import_form.replace_existing }}
+                                        <label for="{{ schedule_import_form.replace_existing.id_for_label }}">Replace current week schedule before import</label>
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Import Schedule</button>
+                                </div>
+                            </form>
+                        </div>
+                    </article>
+                </section>
+
+                <aside class="branch-workspace-side">
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <h2>Export Tools</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="status-action-list">
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="schedule_action" value="export_schedule_template">
+                                    <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                    <button type="submit" class="btn btn-light branch-status-action">Download Blank Template</button>
+                                </form>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="schedule_action" value="export_schedule">
+                                    <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                    <button type="submit" class="btn btn-light branch-status-action">Export Current Week</button>
+                                </form>
+                            </div>
+                            <div class="workspace-timeline">
+                                <div class="workspace-timeline-item">
+                                    <strong>Recommended Flow</strong>
+                                    <p>Download the template, edit it in Google Sheets, export as Excel or CSV, then import it into this week.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <h2>Duty Colors</h2>
+                        </div>
+                        <div class="card-body">
+                            {% if duty_option_style_forms %}
+                                <div class="branch-duty-style-list">
+                                    {% for row in duty_option_style_forms %}
+                                        <form method="post" class="branch-duty-style-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="schedule_action" value="update_duty_option_style">
+                                            <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                            <input type="hidden" name="duty_option_id" value="{{ row.option.id }}">
+                                            <div class="branch-duty-style-head">
+                                                <strong>{{ row.option.label }}</strong>
+                                                <span class="branch-duty-style-preview" style="background: {{ row.option.resolved_background_color|default:'#1f2937' }}; color: {{ row.option.resolved_text_color|default:'#f8fafc' }};">Preview</span>
+                                            </div>
+                                            <div class="workspace-form-grid branch-duty-style-grid">
+                                                <div class="form-group">
+                                                    <label for="{{ row.style_form.background_color.id_for_label }}">Cell Color</label>
+                                                    {{ row.style_form.background_color }}
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="{{ row.style_form.text_color.id_for_label }}">Font Color</label>
+                                                    {{ row.style_form.text_color }}
+                                                </div>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-light">Save Colors</button>
+                                            </div>
+                                        </form>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state">
+                                    <h3>No duty options yet</h3>
+                                    <p>Import schedule values first, then you can style each duty option here.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </article>
+
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <h2>Duty Timing</h2>
+                        </div>
+                        <div class="card-body">
+                            {% if duty_option_style_forms %}
+                                <div class="branch-duty-style-list branch-duty-timing-list">
+                                    {% for row in duty_option_style_forms %}
+                                        <form method="post" class="branch-duty-style-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="schedule_action" value="update_duty_option_timing">
+                                            <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                            <input type="hidden" name="duty_option_id" value="{{ row.option.id }}">
+                                            <div class="branch-duty-style-head">
+                                                <strong>{{ row.option.label }}</strong>
+                                                <span class="branch-duty-timing-preview">
+                                                    {% if row.option.default_start_time and row.option.default_end_time %}
+                                                        {{ row.option.default_start_time|time:"g:i a" }} to {{ row.option.default_end_time|time:"g:i a" }}
+                                                    {% else %}
+                                                        No time
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                            <div class="workspace-form-grid branch-duty-style-grid">
+                                                <div class="form-group">
+                                                    <label for="{{ row.timing_form.default_start_time.id_for_label }}">Start</label>
+                                                    {{ row.timing_form.default_start_time }}
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="{{ row.timing_form.default_end_time.id_for_label }}">End</label>
+                                                    {{ row.timing_form.default_end_time }}
+                                                </div>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-light">Save Timing</button>
+                                            </div>
+                                        </form>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty-state">
+                                    <h3>No duty options yet</h3>
+                                    <p>Import schedule values first, then you can manage timing for each duty.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </article>
+
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <h2>Schedule Table Colors</h2>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" class="branch-duty-style-form branch-schedule-theme-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="schedule_action" value="update_schedule_theme">
+                                <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                <div class="workspace-form-grid branch-schedule-theme-grid">
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.employee_column_bg.id_for_label }}">Employee Column</label>
+                                        {{ schedule_theme_form.employee_column_bg }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.employee_column_text.id_for_label }}">Employee Font</label>
+                                        {{ schedule_theme_form.employee_column_text }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.job_title_column_bg.id_for_label }}">Job Title Column</label>
+                                        {{ schedule_theme_form.job_title_column_bg }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.job_title_column_text.id_for_label }}">Job Title Font</label>
+                                        {{ schedule_theme_form.job_title_column_text }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.pending_off_column_bg.id_for_label }}">Pending Off Column</label>
+                                        {{ schedule_theme_form.pending_off_column_bg }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.pending_off_column_text.id_for_label }}">Pending Off Font</label>
+                                        {{ schedule_theme_form.pending_off_column_text }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.day_header_bg.id_for_label }}">Day Header Row</label>
+                                        {{ schedule_theme_form.day_header_bg }}
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="{{ schedule_theme_form.day_header_text.id_for_label }}">Day Header Font</label>
+                                        {{ schedule_theme_form.day_header_text }}
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-light">Save Table Colors</button>
+                                </div>
+                            </form>
+                        </div>
+                    </article>
+
+                    <article class="card detail-card modern-soft-card branch-workspace-panel">
+                        <div class="card-header">
+                            <h2>Employee Order</h2>
+                        </div>
+                        <div class="card-body">
+                            {% if employee_order_rows %}
+                                <form method="post" class="branch-duty-style-form branch-employee-order-form" id="employee-order-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="schedule_action" value="update_employee_order">
+                                    <input type="hidden" name="week" value="{{ selected_week_start|date:'Y-m-d' }}">
+                                    <div class="branch-employee-order-list" id="branch-employee-order-list">
+                                        {% for row in employee_order_rows %}
+                                            <div class="branch-employee-order-item">
+                                                <input type="hidden" name="ordered_employee_ids" value="{{ row.employee.id }}">
+                                                <span class="branch-employee-order-handle">↕</span>
+                                                <strong>{{ row.employee.full_name }}</strong>
+                                                <small>{{ row.employee.job_title.name|default:"-" }}</small>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-light">Save Order</button>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <div class="empty-state">
+                                    <h3>No employees to order</h3>
+                                    <p>Active branch employees will appear here for schedule ordering.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </article>
+                </aside>
+            </div>
+        {% endif %}
+
+        <article class="card detail-card modern-soft-card branch-workspace-panel">
             <div class="card-header">
                 <div class="section-heading">
                     <div>
-                        <h2>Weekly Roster Board</h2>
-                        <p class="page-subtitle">Select employees on the left, choose a shift inside each day box, and use the side columns for notes, orders, and follow-up items.</p>
+                        <h2>Published Week Schedule</h2>
+                        <p class="page-subtitle">Structured branch roster from the official schedule entries already stored in the app.</p>
                     </div>
-                    <span class="badge badge-primary">{{ free_grid_filled_cells }} Filled Cell{{ free_grid_filled_cells|pluralize }}</span>
+                    <div class="branch-schedule-size-controls" data-schedule-size-controls>
+                        <span class="branch-schedule-size-label">Cell Size</span>
+                        <button type="button" class="btn btn-light branch-schedule-size-button is-active" data-schedule-size="compact">Small</button>
+                        <button type="button" class="btn btn-light branch-schedule-size-button" data-schedule-size="comfortable">Medium</button>
+                        <button type="button" class="btn btn-light branch-schedule-size-button" data-schedule-size="large">Large</button>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
-                {% if free_grid_rows %}
-                    <form method="post" id="free-schedule-grid-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="schedule_action" value="save_free_grid">
-
-                        <div class="branch-schedule-sheet-toolbar">
-                            <div class="branch-schedule-sheet-note">
-                                <strong>Roster mode</strong>
-                                <span>Each employee has one row and each day has one shift box. This matches real branch roster planning more closely.</span>
-                            </div>
-                            <div class="branch-schedule-sheet-note">
-                                <strong>Fast input</strong>
-                                <span>Use the dropdown for common shifts, or paste values from Excel and Google Sheets directly into the roster cells.</span>
-                            </div>
-                        </div>
-
-                        <div class="free-schedule-grid-wrap">
-                            <table class="free-schedule-grid-table free-schedule-grid-table-roster">
-                                <thead>
+                {% if team_schedule_rows %}
+                    <div class="table-responsive branch-schedule-published-wrap" data-schedule-size-container {% if schedule_theme %}style="{{ schedule_theme.inline_style }}"{% endif %}>
+                        <table class="free-schedule-grid-table free-schedule-grid-table-roster branch-schedule-published-table">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Job Title</th>
+                                    <th>Pending Off</th>
+                                    {% for day in week_days %}
+                                        <th>{{ day|date:"l" }}<br><small>{{ day|date:"j-M-Y" }}</small></th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in team_schedule_rows %}
                                     <tr>
-                                        {% for header in free_grid_headers %}
-                                            <th class="{% if forloop.counter <= 2 %}free-schedule-sticky-col{% endif %}{% if header.theme %} free-schedule-theme-{{ header.theme }}{% endif %}">
-                                                {% if can_manage_branch_weekly_schedule %}
-                                                    <input
-                                                        class="form-control free-grid-header-input"
-                                                        type="text"
-                                                        name="{{ header.input_name }}"
-                                                        value="{{ header.value }}"
-                                                        placeholder="{{ header.default_label }}"
-                                                    >
+                                        <td class="free-schedule-meta-cell"><strong>{{ row.employee.full_name }}</strong></td>
+                                        <td class="free-schedule-meta-cell">{{ row.employee.job_title.name|default:"-" }}</td>
+                                        <td class="free-schedule-meta-cell">{{ row.pending_off_total }}</td>
+                                        {% for cell in row.cells %}
+                                            <td class="free-schedule-duty-cell">
+                                                {% if cell.entry %}
+                                                    <div class="branch-schedule-public-cell" {% if cell.entry.inline_color_style %}style="{{ cell.entry.inline_color_style }}"{% endif %}>
+                                                        <strong>{{ cell.entry.primary_schedule_label }}</strong>
+                                                        {% if cell.entry.should_show_time_range_line %}
+                                                            <span>{{ cell.entry.formatted_time_range }}</span>
+                                                        {% else %}
+                                                            <span>{{ cell.entry.get_status_display }}</span>
+                                                        {% endif %}
+                                                        {% if cell.entry.order_note %}
+                                                            <small>{{ cell.entry.order_note }}</small>
+                                                        {% endif %}
+                                                    </div>
                                                 {% else %}
-                                                    {{ header.value|default:header.default_label }}
+                                                    <div class="free-grid-readonly">-</div>
                                                 {% endif %}
-                                            </th>
+                                            </td>
                                         {% endfor %}
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in free_grid_rows %}
-                                        <tr>
-                                            <td class="free-schedule-meta-cell free-schedule-sticky-col">
-                                                {% if can_manage_branch_weekly_schedule %}
-                                                    <select
-                                                        class="form-control free-grid-employee-select"
-                                                        name="{{ row.employee_select_name }}"
-                                                        data-job-target="job-title-{{ row.row_index }}"
-                                                    >
-                                                        <option value="">Select employee</option>
-                                                        {% for option in row.employee_options %}
-                                                            <option
-                                                                value="{{ option.id }}"
-                                                                data-job-title="{{ option.job_title }}"
-                                                                {% if row.employee and row.employee.id == option.id %}selected{% endif %}
-                                                            >
-                                                                {{ option.label }}
-                                                            </option>
-                                                        {% endfor %}
-                                                    </select>
-                                                {% else %}
-                                                    <strong>{{ row.employee.full_name|default:"-" }}</strong>
-                                                {% endif %}
-                                            </td>
-                                            <td class="free-schedule-meta-cell free-schedule-sticky-col" id="job-title-{{ row.row_index }}">
-                                                <span>{{ row.employee_job_title|default:"-" }}</span>
-                                            </td>
-
-                                            {% for cell in row.cells %}
-                                                {% if cell.theme != "notes" and cell.theme != "orders" and cell.theme != "followup" %}
-                                                    <td class="free-schedule-duty-cell free-schedule-theme-{{ cell.theme }}">
-                                                        {% if can_manage_branch_weekly_schedule %}
-                                                            <div class="free-shift-box">
-                                                                <select
-                                                                    class="form-control free-grid-input free-grid-shift-select"
-                                                                    name="{{ cell.input_name }}"
-                                                                    data-row-index="{{ cell.row_index }}"
-                                                                    data-col-index="{{ forloop.counter0 }}"
-                                                                    data-shift-select
-                                                                >
-                                                                    {% for option in free_grid_shift_options %}
-                                                                        <option value="{{ option }}" {% if cell.value == option %}selected{% endif %}>
-                                                                            {{ option|default:"Select shift" }}
-                                                                        </option>
-                                                                    {% endfor %}
-                                                                    {% if cell.value and cell.value not in free_grid_shift_options %}
-                                                                        <option value="{{ cell.value }}" selected>{{ cell.value }}</option>
-                                                                    {% endif %}
-                                                                </select>
-                                                                <span class="free-shift-box-label" data-shift-label>{{ cell.value|default:"Select shift" }}</span>
-                                                            </div>
-                                                        {% else %}
-                                                            <div class="free-grid-readonly free-shift-box-readonly">{{ cell.value|default:"-" }}</div>
-                                                        {% endif %}
-                                                    </td>
-                                                {% else %}
-                                                    <td class="free-schedule-duty-cell free-schedule-theme-{{ cell.theme }}">
-                                                        {% if can_manage_branch_weekly_schedule %}
-                                                            <textarea
-                                                                class="form-control free-grid-input free-grid-textarea"
-                                                                name="{{ cell.input_name }}"
-                                                                data-row-index="{{ cell.row_index }}"
-                                                                data-col-index="{{ forloop.counter0 }}"
-                                                                rows="3"
-                                                            >{{ cell.value }}</textarea>
-                                                        {% else %}
-                                                            <div class="free-grid-readonly">{{ cell.value|default:"-" }}</div>
-                                                        {% endif %}
-                                                    </td>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </form>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 {% else %}
                     <div class="empty-state">
-                        <h3>No active team members found</h3>
-                        <p>Assign employees to this branch to start building the roster.</p>
+                        <h3>No published weekly schedule yet</h3>
+                        <p>Import a Google Sheets / Excel file or add branch schedule entries to publish this week.</p>
                     </div>
                 {% endif %}
             </div>
-        </div>
+        </article>
     </div>
 </div>
 {% endblock %}
@@ -164,93 +403,68 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const gridInputs = Array.from(document.querySelectorAll(".free-grid-input"));
-    const employeeSelects = Array.from(document.querySelectorAll(".free-grid-employee-select"));
-    const shiftSelects = Array.from(document.querySelectorAll("[data-shift-select]"));
+    const tableWrap = document.querySelector("[data-schedule-size-container]");
+    const buttons = Array.from(document.querySelectorAll("[data-schedule-size]"));
+    const storageKey = "branchSchedulePublishedSize";
+    const orderList = document.getElementById("branch-employee-order-list");
 
-    function updateShiftLabel(select) {
-        const box = select.closest(".free-shift-box");
-        if (!box) {
-            return;
-        }
-        const label = box.querySelector("[data-shift-label]");
-        if (label) {
-            label.textContent = select.value || "Select shift";
-        }
-        box.setAttribute("data-shift-value", (select.value || "").toLowerCase());
-    }
-
-    shiftSelects.forEach(function (select) {
-        updateShiftLabel(select);
-        select.addEventListener("change", function () {
-            updateShiftLabel(select);
-        });
-    });
-
-    if (!gridInputs.length) {
-        employeeSelects.forEach(function (select) {
-            select.addEventListener("change", function () {
-                const selectedOption = select.options[select.selectedIndex];
-                const jobTarget = document.getElementById(select.dataset.jobTarget);
-                if (jobTarget) {
-                    jobTarget.innerHTML = "<span>" + ((selectedOption && selectedOption.dataset.jobTitle) || "-") + "</span>";
-                }
-            });
-        });
+    if (!tableWrap || !buttons.length) {
         return;
     }
 
-    function getCell(rowIndex, colIndex) {
-        return document.querySelector(
-            '.free-grid-input[data-row-index="' + rowIndex + '"][data-col-index="' + colIndex + '"]'
-        );
+    function applySize(sizeValue) {
+        const nextSize = ["compact", "comfortable", "large"].includes(sizeValue) ? sizeValue : "compact";
+        tableWrap.setAttribute("data-schedule-size-mode", nextSize);
+        buttons.forEach(function (button) {
+            button.classList.toggle("is-active", button.dataset.scheduleSize === nextSize);
+        });
+        window.localStorage.setItem(storageKey, nextSize);
     }
 
-    gridInputs.forEach(function (input) {
-        input.addEventListener("paste", function (event) {
-            const clipboardText = (event.clipboardData || window.clipboardData).getData("text");
-            if (!clipboardText) {
-                return;
-            }
+    applySize(window.localStorage.getItem(storageKey) || "compact");
 
-            const rows = clipboardText
-                .replace(/\r/g, "")
-                .split("\n")
-                .filter(function (row) { return row.length > 0; })
-                .map(function (row) { return row.split("\t"); });
+    buttons.forEach(function (button) {
+        button.addEventListener("click", function () {
+            applySize(button.dataset.scheduleSize);
+        });
+    });
 
-            if (rows.length <= 1 && rows[0] && rows[0].length <= 1) {
-                return;
-            }
+    if (orderList) {
+        let draggedItem = null;
 
-            event.preventDefault();
+        Array.from(orderList.querySelectorAll(".branch-employee-order-item")).forEach(function (item) {
+            item.setAttribute("draggable", "true");
 
-            const startRow = parseInt(input.dataset.rowIndex, 10);
-            const startCol = parseInt(input.dataset.colIndex, 10);
+            item.addEventListener("dragstart", function () {
+                draggedItem = item;
+                item.classList.add("is-dragging");
+            });
 
-            rows.forEach(function (rowValues, rowOffset) {
-                rowValues.forEach(function (value, colOffset) {
-                    const target = getCell(startRow + rowOffset, startCol + colOffset);
-                    if (target) {
-                        target.value = value.trim();
-                        if (target.matches("[data-shift-select]")) {
-                            updateShiftLabel(target);
-                        }
-                    }
-                });
+            item.addEventListener("dragend", function () {
+                item.classList.remove("is-dragging");
+                draggedItem = null;
+            });
+
+            item.addEventListener("dragover", function (event) {
+                event.preventDefault();
+            });
+
+            item.addEventListener("drop", function (event) {
+                event.preventDefault();
+                if (!draggedItem || draggedItem === item) {
+                    return;
+                }
+
+                const bounds = item.getBoundingClientRect();
+                const shouldInsertAfter = (event.clientY - bounds.top) > (bounds.height / 2);
+                if (shouldInsertAfter) {
+                    item.after(draggedItem);
+                } else {
+                    item.before(draggedItem);
+                }
             });
         });
-    });
-
-    employeeSelects.forEach(function (select) {
-        select.addEventListener("change", function () {
-            const selectedOption = select.options[select.selectedIndex];
-            const jobTarget = document.getElementById(select.dataset.jobTarget);
-            if (jobTarget) {
-                jobTarget.innerHTML = "<span>" + ((selectedOption && selectedOption.dataset.jobTitle) || "-") + "</span>";
-            }
-        });
-    });
+    }
 });
 </script>
 {% endblock %}

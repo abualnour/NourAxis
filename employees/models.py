@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from django.conf import settings
@@ -260,6 +261,7 @@ class Employee(models.Model):
 
 WORKING_HOURS_PER_DAY = Decimal("8.00")
 WEEKLY_OFF_WEEKDAYS = {4}  # Friday only
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 @dataclass
@@ -846,6 +848,14 @@ class EmployeeAttendanceLedger(models.Model):
     late_minutes = models.PositiveIntegerField(default=0)
     early_departure_minutes = models.PositiveIntegerField(default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
+    check_in_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_in_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_out_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_out_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    check_in_location_label = models.CharField(max_length=255, blank=True, default="")
+    check_out_location_label = models.CharField(max_length=255, blank=True, default="")
+    check_in_address = models.TextField(blank=True, default="")
+    check_out_address = models.TextField(blank=True, default="")
     is_paid_day = models.BooleanField(default=True)
     source = models.CharField(
         max_length=20,
@@ -1344,6 +1354,8 @@ class EmployeeAttendanceEvent(models.Model):
     check_out_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     check_in_location_label = models.CharField(max_length=255, blank=True, default="")
     check_out_location_label = models.CharField(max_length=255, blank=True, default="")
+    check_in_address = models.TextField(blank=True, default="")
+    check_out_address = models.TextField(blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
     notes = models.TextField(blank=True)
     synced_ledger = models.ForeignKey(
@@ -1983,6 +1995,36 @@ class BranchWeeklyScheduleEntry(models.Model):
         return ""
 
     @property
+    def formatted_time_range(self):
+        if not (self.start_time and self.end_time):
+            return ""
+        return (
+            f"{self.start_time.strftime('%I:%M %p').lstrip('0').lower()} "
+            f"to {self.end_time.strftime('%I:%M %p').lstrip('0').lower()}"
+        )
+
+    @property
+    def primary_schedule_label(self):
+        if self.shift_label:
+            return self.shift_label
+        if self.duty_option_id:
+            return self.duty_option.label
+        if self.title:
+            return self.title
+        return self.get_duty_type_display()
+
+    @property
+    def should_show_time_range_line(self):
+        if self.duty_type != self.DUTY_TYPE_SHIFT:
+            return False
+
+        time_range = self.formatted_time_range.strip().lower()
+        primary_label = (self.primary_schedule_label or "").strip().lower()
+        if not time_range:
+            return False
+        return time_range != primary_label
+
+    @property
     def sheet_cell_class(self):
         if self.duty_type in {self.DUTY_TYPE_OFF, self.DUTY_TYPE_EXTRA_OFF}:
             return "is-off"
@@ -1991,6 +2033,12 @@ class BranchWeeklyScheduleEntry(models.Model):
         if self.start_time and self.start_time.hour < 12:
             return "is-morning"
         return "is-shift"
+
+    @property
+    def inline_color_style(self):
+        if not self.duty_option_id:
+            return ""
+        return self.duty_option.inline_color_style
 
 
 class BranchWeeklyDutyOption(models.Model):
@@ -2007,6 +2055,8 @@ class BranchWeeklyDutyOption(models.Model):
     )
     default_start_time = models.TimeField(null=True, blank=True)
     default_end_time = models.TimeField(null=True, blank=True)
+    background_color = models.CharField(max_length=7, blank=True, default="")
+    text_color = models.CharField(max_length=7, blank=True, default="")
     display_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2034,13 +2084,130 @@ class BranchWeeklyDutyOption(models.Model):
             self.default_start_time = None
             self.default_end_time = None
 
+        if self.background_color and not HEX_COLOR_RE.match(self.background_color):
+            errors["background_color"] = "Background color must use full hex format like #2563eb."
+
+        if self.text_color and not HEX_COLOR_RE.match(self.text_color):
+            errors["text_color"] = "Text color must use full hex format like #ffffff."
+
         if errors:
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.label = (self.label or "").strip()
+        self.background_color = (self.background_color or "").strip()
+        self.text_color = (self.text_color or "").strip()
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    @property
+    def resolved_background_color(self):
+        if self.background_color:
+            return self.background_color
+
+        lowered = (self.label or "").strip().lower()
+        if lowered in {"off", "day off", "extra off", "extra_off"}:
+            return "#facc15"
+        if lowered == "9 am to 5 pm":
+            return "#ef4444"
+        if lowered == "2 pm to 10 pm":
+            return "#2563eb"
+        if lowered == "3 pm to 11 pm":
+            return "#7c3aed"
+        return ""
+
+    @property
+    def resolved_text_color(self):
+        if self.text_color:
+            return self.text_color
+
+        lowered = (self.label or "").strip().lower()
+        if lowered in {"off", "day off", "extra off", "extra_off"}:
+            return "#111827"
+        if lowered in {"9 am to 5 pm", "2 pm to 10 pm", "3 pm to 11 pm"}:
+            return "#f8fafc"
+        return ""
+
+    @property
+    def inline_color_style(self):
+        styles = []
+        if self.resolved_background_color:
+            styles.append(f"--branch-duty-bg: {self.resolved_background_color}")
+        if self.resolved_text_color:
+            styles.append(f"--branch-duty-text: {self.resolved_text_color}")
+        return "; ".join(styles)
+
+
+class BranchWeeklyScheduleTheme(models.Model):
+    branch = models.OneToOneField(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="weekly_schedule_theme",
+    )
+    employee_column_bg = models.CharField(max_length=7, blank=True, default="#101828")
+    employee_column_text = models.CharField(max_length=7, blank=True, default="#f8fafc")
+    job_title_column_bg = models.CharField(max_length=7, blank=True, default="#111827")
+    job_title_column_text = models.CharField(max_length=7, blank=True, default="#f8fafc")
+    pending_off_column_bg = models.CharField(max_length=7, blank=True, default="#172033")
+    pending_off_column_text = models.CharField(max_length=7, blank=True, default="#f8fafc")
+    day_header_bg = models.CharField(max_length=7, blank=True, default="#1d293d")
+    day_header_text = models.CharField(max_length=7, blank=True, default="#f8fafc")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["branch__name"]
+
+    def __str__(self):
+        return f"{self.branch.name} weekly schedule theme"
+
+    def clean(self):
+        errors = {}
+        for field_name in [
+            "employee_column_bg",
+            "employee_column_text",
+            "job_title_column_bg",
+            "job_title_column_text",
+            "pending_off_column_bg",
+            "pending_off_column_text",
+            "day_header_bg",
+            "day_header_text",
+        ]:
+            value = (getattr(self, field_name, "") or "").strip()
+            if value and not HEX_COLOR_RE.match(value):
+                errors[field_name] = "Color must use full hex format like #2563eb."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        for field_name in [
+            "employee_column_bg",
+            "employee_column_text",
+            "job_title_column_bg",
+            "job_title_column_text",
+            "pending_off_column_bg",
+            "pending_off_column_text",
+            "day_header_bg",
+            "day_header_text",
+        ]:
+            setattr(self, field_name, (getattr(self, field_name, "") or "").strip())
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def inline_style(self):
+        return "; ".join(
+            [
+                f"--schedule-employee-column-bg: {self.employee_column_bg}",
+                f"--schedule-employee-column-text: {self.employee_column_text}",
+                f"--schedule-job-title-column-bg: {self.job_title_column_bg}",
+                f"--schedule-job-title-column-text: {self.job_title_column_text}",
+                f"--schedule-pending-column-bg: {self.pending_off_column_bg}",
+                f"--schedule-pending-column-text: {self.pending_off_column_text}",
+                f"--schedule-day-header-bg: {self.day_header_bg}",
+                f"--schedule-day-header-text: {self.day_header_text}",
+            ]
+        )
 
     @property
     def preview_label(self):

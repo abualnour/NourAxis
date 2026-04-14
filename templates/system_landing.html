@@ -27,7 +27,7 @@
 
             <div class="system-home-actions">
                 {% if user.is_authenticated and linked_employee %}
-                    <a href="{% url 'employees:self_service_profile' %}" class="btn btn-primary">Open My Workspace</a>
+                    <a href="{{ nav_self_service_profile_url|default:'#' }}" class="btn btn-primary">Open My Workspace</a>
                 {% if can_view_dashboard %}
                     <a href="{% url 'dashboard_home' %}" class="btn btn-secondary">Go to Dashboard</a>
                 {% endif %}

@@ -20,6 +20,7 @@ from django.views.generic import TemplateView
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+from employees.access import get_workspace_profile_url
 from employees.models import (
     Employee,
     EmployeeActionRecord,
@@ -101,7 +102,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
 
         linked_employee = self.get_employee_profile()
         if linked_employee:
-            return redirect("employees:self_service_profile")
+            return redirect(get_workspace_profile_url(user, linked_employee))
 
         raise PermissionDenied("You do not have permission to access the dashboard.")
 
@@ -468,7 +469,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
                     "request_state_records": request_state_records,
                     "attendance_event_today": employee_profile.attendance_events.filter(attendance_date=timezone.localdate()).first(),
                     "self_service_quick_links": [
-                        {"label": "My Workspace", "url": reverse("employees:self_service_profile")},
+                        {"label": "My Workspace", "url": get_workspace_profile_url(user, employee_profile)},
                         {"label": "My Leave", "url": reverse("employees:self_service_leave")},
                         {"label": "My Documents", "url": reverse("employees:self_service_documents")},
                         {"label": "My Attendance", "url": reverse("employees:self_service_attendance")},

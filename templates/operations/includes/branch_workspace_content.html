@@ -1,0 +1,269 @@
+<div class="branch-workspace-shell">
+    <div class="branch-workspace-hero-grid">
+        <article class="card modern-soft-card branch-workspace-panel">
+            <div class="card-header">
+                <h2>Branch Overview</h2>
+            </div>
+            <div class="card-body">
+                <div class="workspace-kpi-grid">
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Branch</span>
+                        <strong>{{ branch.name }}</strong>
+                    </div>
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Company</span>
+                        <strong>{{ branch.company.name }}</strong>
+                    </div>
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Team Members</span>
+                        <strong>{{ branch_workspace_team_total }}</strong>
+                    </div>
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Today Schedule</span>
+                        <strong>{{ branch_workspace_today_schedule_total }}</strong>
+                    </div>
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Open Tasks</span>
+                        <strong>{{ branch_workspace_open_task_total }}</strong>
+                    </div>
+                    <div class="workspace-kpi">
+                        <span class="workspace-kpi-label">Awaiting Approval</span>
+                        <strong>{{ branch_workspace_approval_waiting_total }}</strong>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <article class="card modern-soft-card branch-workspace-panel">
+            <div class="card-header">
+                <h2>Quick Links</h2>
+            </div>
+            <div class="card-body">
+                <div class="workspace-inline-actions">
+                    <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
+                    <a class="btn btn-light" href="{{ self_service_my_schedule_url }}">My Schedule</a>
+                    {% if branch_workspace_schedule_url %}
+                        <a class="btn btn-light" href="{{ branch_workspace_schedule_url }}">Weekly Schedule</a>
+                    {% elif self_service_weekly_schedule_url %}
+                        <a class="btn btn-light" href="{{ self_service_weekly_schedule_url }}">Weekly Schedule</a>
+                    {% endif %}
+                    {% if branch_workspace_detail_url %}
+                        <a class="btn btn-secondary" href="{{ branch_workspace_detail_url }}">Full Branch Workspace</a>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <div class="branch-workspace-layout">
+        <section class="branch-workspace-main">
+            {% if can_create_branch_post and branch_post_form %}
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>New Branch Post</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'operations:branch_post_create' branch.id %}" enctype="multipart/form-data" class="workspace-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <div class="workspace-form-grid">
+                                <div class="form-group">
+                                    {{ branch_post_form.post_type.label_tag }}
+                                    {{ branch_post_form.post_type }}
+                                    {{ branch_post_form.post_type.errors }}
+                                </div>
+                                <div class="form-group">
+                                    {{ branch_post_form.title.label_tag }}
+                                    {{ branch_post_form.title }}
+                                    {{ branch_post_form.title.errors }}
+                                </div>
+                                <div class="form-group form-group-full">
+                                    {{ branch_post_form.body.label_tag }}
+                                    {{ branch_post_form.body }}
+                                    {{ branch_post_form.body.errors }}
+                                </div>
+                                <div class="form-group">
+                                    {{ branch_post_form.assignee.label_tag }}
+                                    {{ branch_post_form.assignee }}
+                                    {{ branch_post_form.assignee.errors }}
+                                </div>
+                                <div class="form-group">
+                                    {{ branch_post_form.priority.label_tag }}
+                                    {{ branch_post_form.priority }}
+                                    {{ branch_post_form.priority.errors }}
+                                </div>
+                                <div class="form-group">
+                                    {{ branch_post_form.due_date.label_tag }}
+                                    {{ branch_post_form.due_date }}
+                                    {{ branch_post_form.due_date.errors }}
+                                </div>
+                                <div class="form-group">
+                                    {{ branch_post_form.attachment.label_tag }}
+                                    {{ branch_post_form.attachment }}
+                                    {{ branch_post_form.attachment.errors }}
+                                </div>
+                                {% if can_manage_branch_workspace %}
+                                    <div class="form-group form-check">
+                                        {{ branch_post_form.is_pinned }}
+                                        <label for="{{ branch_post_form.is_pinned.id_for_label }}">Pin this post</label>
+                                    </div>
+                                    <div class="form-group form-check">
+                                        {{ branch_post_form.requires_acknowledgement }}
+                                        <label for="{{ branch_post_form.requires_acknowledgement.id_for_label }}">Require acknowledgement</label>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Publish Branch Post</button>
+                            </div>
+                        </form>
+                    </div>
+                </article>
+            {% endif %}
+
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Pinned Updates</h2>
+                </div>
+                <div class="card-body">
+                    {% if branch_workspace_pinned_posts %}
+                        <div class="branch-post-list">
+                            {% for item in branch_workspace_pinned_posts %}
+                                <article class="branch-post-card">
+                                    <div class="branch-post-head">
+                                        <div>
+                                            <span class="branch-post-meta">{{ item.object.get_post_type_display }} · {{ item.object.author_display }}</span>
+                                            <h3><a href="{{ item.detail_url }}">{{ item.object.title }}</a></h3>
+                                        </div>
+                                        <div class="branch-post-badge-row">
+                                            <span class="badge badge-primary">Pinned</span>
+                                            <span class="badge badge-light">{{ item.object.get_status_display }}</span>
+                                        </div>
+                                    </div>
+                                    <p class="branch-post-snippet">{{ item.object.body|truncatechars:220 }}</p>
+                                    <div class="branch-post-footer">
+                                        <span>{{ item.reply_total }} repl{{ item.reply_total|pluralize:"y,ies" }}</span>
+                                        <span>{{ item.ack_total }} ack</span>
+                                        {% if item.assignee_label %}<span>Assigned to {{ item.assignee_label }}</span>{% endif %}
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No pinned updates</h3>
+                            <p>Important branch announcements and pinned tasks will appear here.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Recent Branch Threads</h2>
+                </div>
+                <div class="card-body">
+                    {% if branch_workspace_recent_posts %}
+                        <div class="branch-post-list">
+                            {% for item in branch_workspace_recent_posts %}
+                                <article class="branch-post-card">
+                                    <div class="branch-post-head">
+                                        <div>
+                                            <span class="branch-post-meta">{{ item.object.get_post_type_display }} · {{ item.object.author_display }} · {{ item.object.updated_at|date:"M j, Y g:i a" }}</span>
+                                            <h3><a href="{{ item.detail_url }}">{{ item.object.title }}</a></h3>
+                                        </div>
+                                        <div class="branch-post-badge-row">
+                                            <span class="badge badge-light">{{ item.object.get_status_display }}</span>
+                                            {% if item.object.priority %}<span class="badge badge-warning">{{ item.object.get_priority_display }}</span>{% endif %}
+                                        </div>
+                                    </div>
+                                    <p class="branch-post-snippet">{{ item.object.body|truncatechars:220 }}</p>
+                                    <div class="branch-post-footer">
+                                        <span>{{ item.reply_total }} repl{{ item.reply_total|pluralize:"y,ies" }}</span>
+                                        {% if item.assignee_label %}<span>{{ item.assignee_label }}{% if item.assignee_role_label %} · {{ item.assignee_role_label }}{% endif %}</span>{% endif %}
+                                        {% if item.object.due_date %}<span>Due {{ item.object.due_date|date:"M j" }}</span>{% endif %}
+                                        {% if item.is_acknowledged %}<span>Acknowledged</span>{% endif %}
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No branch posts yet</h3>
+                            <p>Announcements, tasks, issues, and updates will start building the branch history here.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </section>
+
+        <aside class="branch-workspace-side">
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Team Members</h2>
+                </div>
+                <div class="card-body">
+                    {% if branch_workspace_team_members %}
+                        <div class="branch-member-grid">
+                            {% for member in branch_workspace_team_members %}
+                                <div class="branch-member-card">
+                                    <strong>{{ member.full_name }}</strong>
+                                    <span>{{ member.short_job_title_display|default:member.job_title.name|default:"-" }}</span>
+                                    {% if member.short_section_display or member.section %}
+                                        <small>{{ member.short_section_display|default:member.section.name }}</small>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <h3>No team members</h3>
+                            <p>Branch employees will appear here when active records exist.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="card modern-soft-card branch-workspace-panel">
+                <div class="card-header">
+                    <h2>Week Snapshot</h2>
+                </div>
+                <div class="card-body">
+                    <div class="workspace-timeline">
+                        <div class="workspace-timeline-item">
+                            <strong>Week Range</strong>
+                            <span>{{ week_start|default:branch_workspace_selected_week_start|date:"M j, Y" }} to {{ week_end|date:"M j, Y" }}</span>
+                        </div>
+                        <div class="workspace-timeline-item">
+                            <strong>Scheduled Items</strong>
+                            <span>{{ schedule_total }}</span>
+                        </div>
+                        <div class="workspace-timeline-item">
+                            <strong>In Progress</strong>
+                            <span>{{ in_progress_total }}</span>
+                        </div>
+                        <div class="workspace-timeline-item">
+                            <strong>Completed</strong>
+                            <span>{{ completed_total }}</span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            {% if my_schedule_today_entry %}
+                <article class="card modern-soft-card branch-workspace-panel">
+                    <div class="card-header">
+                        <h2>My Today Schedule</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="schedule-side-item">
+                            <strong>{{ my_schedule_today_entry.schedule_date|date:"l, M j" }}</strong>
+                            <span>{{ my_schedule_today_label }}</span>
+                            <small>{% if my_schedule_today_entry.start_time and my_schedule_today_entry.end_time %}{{ my_schedule_today_entry.start_time|time:"g:i a" }} to {{ my_schedule_today_entry.end_time|time:"g:i a" }}{% else %}{{ my_schedule_today_entry.get_status_display }}{% endif %}</small>
+                        </div>
+                    </div>
+                </article>
+            {% endif %}
+        </aside>
+    </div>
+</div>
