@@ -51,6 +51,7 @@ from .views import (
     self_service_weekly_schedule_page,
     self_service_leave_page,
     self_service_working_time_page,
+    supervisor_attendance_history,
 )
 
 app_name = "employees"
@@ -61,6 +62,7 @@ urlpatterns = [
     path("attendance/", attendance_management, name="attendance_management"),
     path("action-center/", employee_admin_action_center, name="employee_admin_action_center"),
     path("requests-overview/", employee_requests_overview, name="employee_requests_overview"),
+    path("supervisor/attendance-history/", supervisor_attendance_history, name="supervisor_attendance_history"),
     path("self-service/", self_service_profile_page, name="self_service_profile"),
     path("self-service/leave/", self_service_leave_page, name="self_service_leave"),
     path("self-service/documents/", self_service_documents_page, name="self_service_documents"),

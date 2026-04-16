@@ -581,6 +581,26 @@ html[data-theme="premium-light"] .theme-switcher-btn.is-active {
     box-shadow: 0 10px 22px rgba(255, 122, 0, 0.22);
 }
 
+html[data-theme="premium-light"] .topbar-inner,
+html[data-theme="premium-light"] .topbar-panel,
+html[data-theme="premium-light"] .topbar-brand,
+html[data-theme="premium-light"] .topbar-user-card,
+html[data-theme="premium-light"] .topbar-theme-switcher,
+html[data-theme="premium-light"] .topbar-menu-toggle {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%) !important;
+    border-color: rgba(15, 23, 42, 0.10) !important;
+}
+
+html[data-theme="premium-light"] .topbar-brand,
+html[data-theme="premium-light"] .topbar-user-card,
+html[data-theme="premium-light"] .topbar-theme-switcher,
+html[data-theme="premium-light"] .topbar-menu-toggle {
+    background: #ffffff !important;
+    box-shadow: none !important;
+}
+
 html[data-theme="premium-light"] input[type="date"] {
     color-scheme: light;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");

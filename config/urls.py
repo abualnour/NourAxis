@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
 
-from accounts.views import NourAxisLoginView
+from accounts.views import NourAxisLoginView, session_expire, session_ping
 from core.views import BackupCenterView, DashboardHomeView
 from .views import system_landing
 
@@ -13,6 +13,8 @@ urlpatterns = [
     path("system/backup-center/", BackupCenterView.as_view(), name="backup_center"),
     path("admin/", admin.site.urls),
     path("accounts/login/", NourAxisLoginView.as_view(), name="login"),
+    path("accounts/session/ping/", session_ping, name="session_ping"),
+    path("accounts/session/expire/", session_expire, name="session_expire"),
     path("accounts/", include("django.contrib.auth.urls")),
     path("organization/", include(("organization.urls", "organization"), namespace="organization")),
     path("employees/", include("employees.urls")),

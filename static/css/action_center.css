@@ -926,6 +926,15 @@ html[data-theme="premium-olive"] .action-center-page .page-header {
     margin-bottom: 20px;
 }
 
+.action-center-page .action-center-filter-card .card-header {
+    padding-bottom: 16px;
+}
+
+.action-center-page .action-center-filter-form {
+    display: grid;
+    gap: 0;
+}
+
 .action-center-page .action-center-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1250,5 +1259,4 @@ html[data-theme="premium-olive"] .action-center-page .page-header {
         min-height: 0;
     }
 }
-
 

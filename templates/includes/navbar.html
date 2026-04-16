@@ -90,6 +90,9 @@
                         <a href="{% url 'employees:employee_requests_overview' %}" class="topbar-sub-link">Team
                             Requests</a>
                         {% endif %}
+                        {% if nav_supervisor_attendance_history_url %}
+                        <a href="{{ nav_supervisor_attendance_history_url }}" class="topbar-sub-link">Team Attendance History</a>
+                        {% endif %}
                         {% if nav_can_view_branch_documents %}
                         <a href="{% url 'organization:branch_document_list' %}" class="topbar-sub-link">Branch
                             Documents</a>
@@ -261,6 +264,21 @@
             </div>
 
             <div class="topbar-account">
+                {% if user.is_authenticated and session_timeout_enabled %}
+                <div
+                    class="topbar-session-timer"
+                    data-session-timeout
+                    data-timeout-seconds="{{ session_timeout_total_seconds }}"
+                    data-warning-seconds="{{ session_timeout_warning_seconds }}"
+                    data-remaining-seconds="{{ session_timeout_remaining_seconds }}"
+                    data-ping-url="{{ session_timeout_ping_url }}"
+                    data-expire-url="{{ session_timeout_expire_url }}"
+                    data-login-url="{{ session_timeout_login_url }}"
+                >
+                    <span class="topbar-session-label">Session</span>
+                    <strong class="topbar-session-value" data-session-remaining>{{ session_timeout_remaining_label }}</strong>
+                </div>
+                {% endif %}
                 <div class="topbar-theme-switcher" aria-label="Theme mode switcher">
                     <button type="button" class="theme-switcher-btn topbar-theme-btn" data-theme-choice="premium-dark"
                         aria-label="Use dark theme" title="Dark theme">

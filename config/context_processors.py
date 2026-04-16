@@ -10,6 +10,12 @@ from employees.access import (
     is_supervisor_user as is_supervisor_user_role,
 )
 from employees.models import Employee
+from .session_timeout import (
+    format_session_remaining_seconds,
+    get_session_remaining_seconds,
+    get_session_timeout_seconds,
+    get_session_warning_seconds,
+)
 
 
 def navbar_context(request):
@@ -35,6 +41,7 @@ def navbar_context(request):
             "nav_primary_home_label": "System Home",
             "nav_is_employee_self_service_only": False,
             "nav_supervisor_branch_url": "",
+            "nav_supervisor_attendance_history_url": "",
             "nav_can_view_branch_documents": False,
             "nav_self_service_leave_url": "",
             "nav_self_service_documents_url": "",
@@ -48,6 +55,13 @@ def navbar_context(request):
             "nav_can_view_payroll_workspace": False,
             "nav_hr_workspace_url": "",
             "nav_payroll_workspace_url": "",
+            "session_timeout_enabled": False,
+            "session_timeout_remaining_seconds": 0,
+            "session_timeout_total_seconds": 0,
+            "session_timeout_warning_seconds": 0,
+            "session_timeout_ping_url": "",
+            "session_timeout_expire_url": "",
+            "session_timeout_login_url": reverse("login"),
         }
 
     is_admin_compatible = is_admin_compatible_role(user)
@@ -103,6 +117,9 @@ def navbar_context(request):
     nav_supervisor_branch_url = ""
     if nav_scoped_branch:
         nav_supervisor_branch_url = reverse("employees:self_service_branch")
+    nav_supervisor_attendance_history_url = ""
+    if nav_scoped_branch:
+        nav_supervisor_attendance_history_url = reverse("employees:supervisor_attendance_history")
 
     nav_self_service_leave_url = ""
     nav_self_service_documents_url = ""
@@ -112,6 +129,7 @@ def navbar_context(request):
     nav_self_service_branch_url = ""
     nav_self_service_my_schedule_url = ""
     nav_self_service_weekly_schedule_url = ""
+    session_timeout_remaining_seconds = get_session_remaining_seconds(request)
 
     if employee_profile:
         nav_self_service_profile_url = get_workspace_profile_url(user, employee_profile)
@@ -163,6 +181,7 @@ def navbar_context(request):
         "nav_primary_home_label": primary_home_label,
         "nav_is_employee_self_service_only": nav_is_employee_self_service_only,
         "nav_supervisor_branch_url": nav_supervisor_branch_url,
+        "nav_supervisor_attendance_history_url": nav_supervisor_attendance_history_url,
         "nav_can_view_branch_documents": bool(
             is_admin_compatible
             or is_hr_user
@@ -185,4 +204,12 @@ def navbar_context(request):
         ),
         "nav_hr_workspace_url": reverse("hr:home"),
         "nav_payroll_workspace_url": reverse("payroll:home"),
+        "session_timeout_enabled": True,
+        "session_timeout_remaining_seconds": session_timeout_remaining_seconds,
+        "session_timeout_remaining_label": format_session_remaining_seconds(session_timeout_remaining_seconds),
+        "session_timeout_total_seconds": get_session_timeout_seconds(),
+        "session_timeout_warning_seconds": get_session_warning_seconds(),
+        "session_timeout_ping_url": reverse("session_ping"),
+        "session_timeout_expire_url": reverse("session_expire"),
+        "session_timeout_login_url": reverse("login"),
     }

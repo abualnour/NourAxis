@@ -194,6 +194,42 @@
     gap: 12px;
 }
 
+.topbar-session-timer {
+    display: inline-grid;
+    gap: 2px;
+    min-width: 108px;
+    padding: 10px 12px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--color-surface-3) 84%, transparent);
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.topbar-session-label {
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.topbar-session-value {
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.topbar-session-timer.is-warning {
+    border-color: color-mix(in srgb, var(--status-warning-border) 75%, transparent);
+    background: color-mix(in srgb, var(--status-warning-bg) 62%, transparent);
+}
+
+.topbar-session-timer.is-danger {
+    border-color: color-mix(in srgb, var(--status-danger-border) 78%, transparent);
+    background: color-mix(in srgb, var(--status-danger-bg) 66%, transparent);
+}
+
 .topbar-theme-switcher {
     display: inline-flex;
     align-items: center;
@@ -465,6 +501,11 @@ html[data-theme="dark-accent"] .theme-switcher-btn[data-theme-choice="dark-accen
         align-items: stretch;
     }
 
+    .topbar-session-timer {
+        width: 100%;
+        min-width: 0;
+    }
+
     .topbar-theme-switcher {
         justify-content: center;
     }
@@ -566,4 +607,34 @@ body[data-theme="premium-light"] .topbar-group.is-open .topbar-group-trigger,
 [data-theme="premium-light"] .topbar-group.is-open .topbar-group-trigger {
     background: rgba(15, 23, 42, 0.05) !important;
     border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="premium-light"] .topbar-inner,
+body[data-theme="premium-light"] .topbar-inner,
+[data-theme="premium-light"] .topbar-inner,
+html[data-theme="premium-light"] .topbar-panel,
+body[data-theme="premium-light"] .topbar-panel,
+[data-theme="premium-light"] .topbar-panel {
+    background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%) !important;
+    border-color: rgba(15, 23, 42, 0.10) !important;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.10) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html[data-theme="premium-light"] .topbar-brand,
+body[data-theme="premium-light"] .topbar-brand,
+[data-theme="premium-light"] .topbar-brand,
+html[data-theme="premium-light"] .topbar-user-card,
+body[data-theme="premium-light"] .topbar-user-card,
+[data-theme="premium-light"] .topbar-user-card,
+html[data-theme="premium-light"] .topbar-theme-switcher,
+body[data-theme="premium-light"] .topbar-theme-switcher,
+[data-theme="premium-light"] .topbar-theme-switcher,
+html[data-theme="premium-light"] .topbar-menu-toggle,
+body[data-theme="premium-light"] .topbar-menu-toggle,
+[data-theme="premium-light"] .topbar-menu-toggle {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.10) !important;
+    box-shadow: none !important;
 }

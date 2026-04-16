@@ -69,6 +69,23 @@ class Branch(TimeStampedModel):
     name = models.CharField(max_length=255)
     city = models.CharField(max_length=150, blank=True)
     email = models.EmailField(blank=True)
+    attendance_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+    attendance_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+    attendance_radius_meters = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Allowed attendance radius in meters from the fixed branch point.",
+    )
     image = models.ImageField(
         upload_to=branch_image_upload_to,
         blank=True,
@@ -84,6 +101,47 @@ class Branch(TimeStampedModel):
 
     def __str__(self):
         return f"{self.company.name} - {self.name}"
+
+    def clean(self):
+        errors = {}
+
+        has_latitude = self.attendance_latitude is not None
+        has_longitude = self.attendance_longitude is not None
+        has_radius = self.attendance_radius_meters is not None
+
+        if has_latitude or has_longitude or has_radius:
+            if not (has_latitude and has_longitude and has_radius):
+                message = "Latitude, longitude, and attendance radius must all be set together."
+                if not has_latitude:
+                    errors["attendance_latitude"] = message
+                if not has_longitude:
+                    errors["attendance_longitude"] = message
+                if not has_radius:
+                    errors["attendance_radius_meters"] = message
+
+        if has_latitude and not (-90 <= self.attendance_latitude <= 90):
+            errors["attendance_latitude"] = "Attendance latitude must stay between -90 and 90."
+
+        if has_longitude and not (-180 <= self.attendance_longitude <= 180):
+            errors["attendance_longitude"] = "Attendance longitude must stay between -180 and 180."
+
+        if has_radius and self.attendance_radius_meters <= 0:
+            errors["attendance_radius_meters"] = "Attendance radius must be greater than zero."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def has_attendance_location_config(self):
+        return (
+            self.attendance_latitude is not None
+            and self.attendance_longitude is not None
+            and self.attendance_radius_meters is not None
+        )
 
 
 class Department(TimeStampedModel):

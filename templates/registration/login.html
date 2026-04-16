@@ -52,6 +52,12 @@
                 </div>
             {% endif %}
 
+            {% if session_status == "expired" %}
+                <div class="alert alert-warning">
+                    Your session timed out due to inactivity. Please sign in again to continue.
+                </div>
+            {% endif %}
+
             {% if next %}
                 {% if user.is_authenticated %}
                     <div class="alert alert-warning">Your account does not have access to that page.</div>

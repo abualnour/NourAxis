@@ -1329,10 +1329,16 @@ class EmployeeAttendanceCorrection(models.Model):
 class EmployeeAttendanceEvent(models.Model):
     STATUS_OPEN = "open"
     STATUS_COMPLETED = "completed"
+    LOCATION_STATUS_INSIDE = "inside_radius"
+    LOCATION_STATUS_OUTSIDE = "outside_radius"
 
     STATUS_CHOICES = [
         (STATUS_OPEN, "Open"),
         (STATUS_COMPLETED, "Completed"),
+    ]
+    LOCATION_STATUS_CHOICES = [
+        (LOCATION_STATUS_INSIDE, "Inside Radius"),
+        (LOCATION_STATUS_OUTSIDE, "Outside Radius"),
     ]
 
     employee = models.ForeignKey(
@@ -1356,6 +1362,23 @@ class EmployeeAttendanceEvent(models.Model):
     check_out_location_label = models.CharField(max_length=255, blank=True, default="")
     check_in_address = models.TextField(blank=True, default="")
     check_out_address = models.TextField(blank=True, default="")
+    branch_latitude_used = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    branch_longitude_used = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    attendance_radius_meters_used = models.PositiveIntegerField(null=True, blank=True)
+    check_in_distance_meters = models.PositiveIntegerField(null=True, blank=True)
+    check_out_distance_meters = models.PositiveIntegerField(null=True, blank=True)
+    check_in_location_validation_status = models.CharField(
+        max_length=20,
+        choices=LOCATION_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    check_out_location_validation_status = models.CharField(
+        max_length=20,
+        choices=LOCATION_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
     notes = models.TextField(blank=True)
     synced_ledger = models.ForeignKey(
@@ -1404,6 +1427,12 @@ class EmployeeAttendanceEvent(models.Model):
         total_seconds = Decimal((self.check_out_at - self.check_in_at).total_seconds())
         hours = total_seconds / Decimal("3600")
         return f"{hours.quantize(Decimal('0.01'))}"
+
+    @property
+    def branch_location_used_label(self):
+        if self.branch_latitude_used is None or self.branch_longitude_used is None:
+            return ""
+        return f"{self.branch_latitude_used}, {self.branch_longitude_used}"
 
 
 class EmployeeHistory(models.Model):

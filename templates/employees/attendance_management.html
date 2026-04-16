@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Attendance Management{% endblock %}
+{% block title %}{{ attendance_history_page_title|default:"Attendance Management" }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/employees.css' %}">
@@ -11,13 +11,11 @@
 <div class="attendance-management-page">
 <div class="page-header">
     <div>
-        <h1 class="page-title">Attendance Management</h1>
-        <p class="page-subtitle">
-            Admin-only attendance review center for filtering, auditing, and following attendance performance across the organization.
-        </p>
+        <h1 class="page-title">{{ attendance_history_page_title|default:"Attendance Management" }}</h1>
+        <p class="page-subtitle">{{ attendance_history_page_subtitle }}</p>
     </div>
     <div class="page-actions">
-        <a href="{% url 'employees:employee_list' %}" class="btn btn-secondary">Back to Directory</a>
+        <a href="{% url 'employees:employee_list' %}" class="btn btn-secondary">{{ attendance_history_back_button_label|default:"Back to Directory" }}</a>
     </div>
 </div>
 
@@ -76,16 +74,16 @@
             {% endif %}
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary">Apply Filters</button>
-                <a href="{% url 'employees:attendance_management' %}" class="btn btn-secondary">Clear Filters</a>
+                <a href="{% url attendance_history_route_name %}" class="btn btn-secondary">Clear Filters</a>
             </div>
         </form>
     </div>
 </div>
 
-<div class="card table-card attendance-snapshot-card">
-    <div class="card-header attendance-table-header">
+<details class="card table-card attendance-snapshot-card summary-disclosure-card">
+    <summary class="attendance-summary-disclosure-toggle summary-disclosure-toggle">
         <div>
-            <h2>Daily Attendance Snapshot</h2>
+            <h2>{{ attendance_history_snapshot_title|default:"Daily Attendance Snapshot" }}</h2>
             <p class="page-subtitle attendance-header-subtitle">
                 Snapshot date: {{ attendance_snapshot_date|date:"M j, Y" }}. {{ attendance_snapshot_note }}
             </p>
@@ -95,8 +93,8 @@
         {% else %}
             <span class="badge badge-light">Snapshot View</span>
         {% endif %}
-    </div>
-    <div class="card-body attendance-snapshot-body">
+    </summary>
+    <div class="card-body attendance-snapshot-body summary-disclosure-body">
         <div class="summary-grid attendance-summary-grid attendance-snapshot-grid">
             <div class="summary-card">
                 <span class="summary-label">Scoped Active Employees</span>
@@ -120,9 +118,9 @@
             </div>
         </div>
     </div>
-</div>
+</details>
 
-{% if selected_attendance_record and attendance_correction_form %}
+{% if attendance_history_can_request_correction and selected_attendance_record and attendance_correction_form %}
 <div class="card table-card" style="margin-bottom: 22px;">
     <div class="card-header attendance-table-header">
         <div>
@@ -153,98 +151,195 @@
 </div>
 {% endif %}
 
-<div class="summary-grid attendance-summary-grid">
-    <div class="summary-card">
-        <span class="summary-label">Period</span>
-        <span class="summary-value attendance-summary-text">{{ attendance_period_label }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Records</span>
-        <span class="summary-value">{{ attendance_total }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Employees Covered</span>
-        <span class="summary-value">{{ attendance_employee_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Present</span>
-        <span class="summary-value">{{ present_attendance_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Half Day</span>
-        <span class="summary-value">{{ half_day_attendance_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Absence</span>
-        <span class="summary-value">{{ absence_attendance_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Leave</span>
-        <span class="summary-value">{{ leave_attendance_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Weekly Off</span>
-        <span class="summary-value">{{ weekly_off_attendance_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Holiday</span>
-        <span class="summary-value">{{ holiday_attendance_count }}</span>
-    </div>
-</div>
-
-<div class="summary-grid attendance-summary-grid attendance-summary-grid-secondary">
-    <div class="summary-card">
-        <span class="summary-label">Worked Hours</span>
-        <span class="summary-value">{{ total_worked_hours }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Scheduled Hours</span>
-        <span class="summary-value">{{ total_scheduled_hours }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Late Minutes</span>
-        <span class="summary-value">{{ total_late_minutes }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Early Departure</span>
-        <span class="summary-value">{{ total_early_departure_minutes }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Overtime Minutes</span>
-        <span class="summary-value">{{ total_overtime_minutes }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Early Exit Flags</span>
-        <span class="summary-value">{{ early_exit_flag_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Overtime-Ready</span>
-        <span class="summary-value">{{ overtime_ready_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Paid Days</span>
-        <span class="summary-value">{{ paid_day_count }}</span>
-    </div>
-    <div class="summary-card">
-        <span class="summary-label">Unpaid Days</span>
-        <span class="summary-value">{{ unpaid_day_count }}</span>
-    </div>
-</div>
-
-<div class="card table-card">
-    <div class="card-header attendance-table-header">
+<details class="card table-card attendance-summary-disclosure summary-disclosure-card">
+    <summary class="attendance-summary-disclosure-toggle summary-disclosure-toggle">
         <div>
-            <h2>Attendance Ledger</h2>
+            <h2>{% if attendance_history_is_supervisor_scope %}Team Attendance Summary{% else %}Attendance Summary{% endif %}</h2>
             <p class="page-subtitle attendance-header-subtitle">
-                Filtered company-wide attendance records with quick access back to each employee profile.
+                {% if attendance_history_is_supervisor_scope %}
+                    Open only when you need the branch-scoped totals and hour summary.
+                {% else %}
+                    Open only when you need the management totals and worked-hours breakdown for the current attendance filter scope.
+                {% endif %}
             </p>
         </div>
-        {% if attendance_filter_applied %}
-            <span class="badge badge-primary">Filtered View</span>
-        {% endif %}
+        <span class="badge badge-light">Collapsed by Default</span>
+    </summary>
+    <div class="attendance-summary-disclosure-body summary-disclosure-body">
+        <div class="summary-grid attendance-summary-grid">
+            <div class="summary-card">
+                <span class="summary-label">Period</span>
+                <span class="summary-value attendance-summary-text">{{ attendance_period_label }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Records</span>
+                <span class="summary-value">{{ attendance_total }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Employees Covered</span>
+                <span class="summary-value">{{ attendance_employee_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Present</span>
+                <span class="summary-value">{{ present_attendance_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Half Day</span>
+                <span class="summary-value">{{ half_day_attendance_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Absence</span>
+                <span class="summary-value">{{ absence_attendance_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Leave</span>
+                <span class="summary-value">{{ leave_attendance_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Weekly Off</span>
+                <span class="summary-value">{{ weekly_off_attendance_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Holiday</span>
+                <span class="summary-value">{{ holiday_attendance_count }}</span>
+            </div>
+        </div>
+
+        <div class="summary-grid attendance-summary-grid attendance-summary-grid-secondary">
+            <div class="summary-card">
+                <span class="summary-label">Worked Hours</span>
+                <span class="summary-value">{{ total_worked_hours }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Scheduled Hours</span>
+                <span class="summary-value">{{ total_scheduled_hours }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Late Minutes</span>
+                <span class="summary-value">{{ total_late_minutes }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Early Departure</span>
+                <span class="summary-value">{{ total_early_departure_minutes }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Overtime Minutes</span>
+                <span class="summary-value">{{ total_overtime_minutes }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Early Exit Flags</span>
+                <span class="summary-value">{{ early_exit_flag_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Overtime-Ready</span>
+                <span class="summary-value">{{ overtime_ready_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Paid Days</span>
+                <span class="summary-value">{{ paid_day_count }}</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">Unpaid Days</span>
+                <span class="summary-value">{{ unpaid_day_count }}</span>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
+</details>
+
+<details class="card table-card summary-disclosure-card">
+    <summary class="attendance-summary-disclosure-toggle summary-disclosure-toggle">
+        <div>
+            <h2>Attendance Ledger</h2>
+            <p class="page-subtitle attendance-header-subtitle">{{ attendance_history_ledger_subtitle }}</p>
+        </div>
+        <div class="page-actions">
+            {% if attendance_filter_applied %}
+                <span class="badge badge-primary">Filtered View</span>
+            {% endif %}
+            <span class="badge badge-light">Collapsed by Default</span>
+        </div>
+    </summary>
+    <div class="card-body summary-disclosure-body">
         {% if attendance_records %}
+            {% if attendance_history_is_supervisor_scope %}
+                <div class="attendance-history-card-list">
+                    {% for record in attendance_records %}
+                        <details class="attendance-history-disclosure attendance-management-disclosure">
+                            <summary class="attendance-history-summary">
+                                <div class="attendance-history-summary-main">
+                                    <strong class="document-card-title">{{ record.employee.full_name }}</strong>
+                                    <span class="attendance-history-summary-meta">{{ record.attendance_date|date:"D, M j, Y" }} • {{ record.employee.employee_id }}</span>
+                                </div>
+                                <div class="attendance-history-summary-side">
+                                    <span class="badge {{ record.day_status_badge_class }}">{{ record.get_day_status_display }}</span>
+                                    <span class="attendance-history-summary-meta">
+                                        {{ record.worked_hours }} hrs
+                                        {% if record.clock_in_time %} • In {{ record.clock_in_time|time:"H:i" }}{% endif %}
+                                        {% if record.clock_out_time %} • Out {{ record.clock_out_time|time:"H:i" }}{% endif %}
+                                    </span>
+                                </div>
+                            </summary>
+                            <div class="attendance-history-panel">
+                                <div class="detail-grid two-col attendance-record-grid">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Placement</span>
+                                        <span class="detail-value">{{ record.employee.branch|default:"—" }} / {{ record.employee.department|default:"—" }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Section</span>
+                                        <span class="detail-value">{{ record.employee.section|default:record.employee.company|default:"—" }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Worked Hours</span>
+                                        <span class="detail-value">{{ record.worked_hours }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Scheduled Hours</span>
+                                        <span class="detail-value">{{ record.scheduled_hours }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Late Minutes</span>
+                                        <span class="detail-value">{{ record.late_minutes }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Early Departure</span>
+                                        <span class="detail-value">{{ record.early_departure_minutes }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Overtime Minutes</span>
+                                        <span class="detail-value">{{ record.overtime_minutes }}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Attendance Rule</span>
+                                        <span class="detail-value">{{ record.attendance_rule_label }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="attendance-record-location-block">
+                                    <strong>Source</strong>
+                                    <span>{{ record.get_source_display }}</span>
+                                    {% if record.created_by %}<small>By {{ record.created_by }}</small>{% endif %}
+                                </div>
+
+                                <div class="attendance-record-location-block">
+                                    <strong>Notes</strong>
+                                    {% if record.notes %}
+                                        <span>{{ record.notes }}</span>
+                                    {% else %}
+                                        <span class="muted-text">No notes</span>
+                                    {% endif %}
+                                    {% if record.linked_leave %}
+                                        <small>Linked leave: {{ record.linked_leave.get_leave_type_display }}</small>
+                                    {% endif %}
+                                    {% if record.linked_action_record %}
+                                        <small>Linked action: {{ record.linked_action_record.get_action_type_display }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </details>
+                    {% endfor %}
+                </div>
+            {% else %}
             <div class="table-responsive">
                 <table class="table attendance-table">
                     <thead>
@@ -343,16 +438,30 @@
                     </tbody>
                 </table>
             </div>
+            {% endif %}
 
             {% if attendance_page_obj.has_other_pages %}
                 <div class="pagination-wrap">
-                    <div class="pagination">
+                    <div class="pagination employee-directory-pagination">
                         {% if attendance_page_obj.has_previous %}
-                            <a class="btn btn-secondary" href="?{% if attendance_management_querystring %}{{ attendance_management_querystring }}&{% endif %}page={{ attendance_page_obj.previous_page_number }}">Previous</a>
+                            <a class="btn btn-secondary btn-sm" href="?{% if attendance_management_querystring %}{{ attendance_management_querystring }}&{% endif %}page={{ attendance_page_obj.previous_page_number }}">Previous</a>
                         {% endif %}
-                        <span class="pagination-info">Page {{ attendance_page_obj.number }} of {{ attendance_page_obj.paginator.num_pages }}</span>
+                        <div class="employee-directory-pagination-meta">
+                            <span class="pagination-info">Page {{ attendance_page_obj.number }} of {{ attendance_page_obj.paginator.num_pages }}</span>
+                        </div>
+                        <div class="employee-directory-pagination-numbers">
+                            {% for item in attendance_pagination_items %}
+                                {% if item.type == "ellipsis" %}
+                                    <span class="employee-directory-page-ellipsis">...</span>
+                                {% elif item.is_current %}
+                                    <span class="employee-directory-page-number is-active">{{ item.number }}</span>
+                                {% else %}
+                                    <a href="?{% if attendance_management_querystring %}{{ attendance_management_querystring }}&{% endif %}page={{ item.number }}" class="employee-directory-page-number">{{ item.number }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                         {% if attendance_page_obj.has_next %}
-                            <a class="btn btn-secondary" href="?{% if attendance_management_querystring %}{{ attendance_management_querystring }}&{% endif %}page={{ attendance_page_obj.next_page_number }}">Next</a>
+                            <a class="btn btn-secondary btn-sm" href="?{% if attendance_management_querystring %}{{ attendance_management_querystring }}&{% endif %}page={{ attendance_page_obj.next_page_number }}">Next</a>
                         {% endif %}
                     </div>
                 </div>
@@ -360,12 +469,13 @@
         {% else %}
             <div class="empty-state">
                 <h3>No attendance records found</h3>
-                <p>Adjust the filters or start creating attendance ledger entries from employee profiles.</p>
+                <p>{{ attendance_history_empty_message }}</p>
             </div>
         {% endif %}
     </div>
-</div>
+</details>
 
+{% if attendance_history_can_view_corrections %}
 <div class="card table-card" style="margin-top: 22px;">
     <div class="card-header attendance-table-header">
         <div>
@@ -470,4 +580,5 @@
     </div>
 </div>
 </div>
+{% endif %}
 {% endblock %}

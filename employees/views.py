@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 import csv
 from decimal import Decimal
 import io
+from math import asin, cos, radians, sin, sqrt
 import mimetypes
 import re
 from pathlib import Path
@@ -204,6 +205,72 @@ def build_attendance_location_label(cleaned_data):
     return primary_label
 
 
+def calculate_haversine_distance_meters(latitude_a, longitude_a, latitude_b, longitude_b):
+    earth_radius_meters = 6371000
+
+    latitude_a = radians(float(latitude_a))
+    longitude_a = radians(float(longitude_a))
+    latitude_b = radians(float(latitude_b))
+    longitude_b = radians(float(longitude_b))
+
+    delta_latitude = latitude_b - latitude_a
+    delta_longitude = longitude_b - longitude_a
+
+    haversine_value = (
+        sin(delta_latitude / 2) ** 2
+        + cos(latitude_a) * cos(latitude_b) * sin(delta_longitude / 2) ** 2
+    )
+    central_angle = 2 * asin(sqrt(haversine_value))
+    return int(round(earth_radius_meters * central_angle))
+
+
+def get_branch_attendance_validation_result(employee, live_latitude, live_longitude):
+    branch = getattr(employee, "branch", None) if employee else None
+    if branch is None:
+        return {
+            "is_configured": False,
+            "error_message": "This employee is not assigned to a branch attendance location.",
+        }
+
+    if not getattr(branch, "has_attendance_location_config", False):
+        return {
+            "is_configured": False,
+            "error_message": (
+                f"{branch.name} does not have a fixed attendance point configured yet. "
+                "Please contact HR or Operations."
+            ),
+        }
+
+    distance_meters = calculate_haversine_distance_meters(
+        live_latitude,
+        live_longitude,
+        branch.attendance_latitude,
+        branch.attendance_longitude,
+    )
+    allowed_radius_meters = int(branch.attendance_radius_meters or 0)
+    is_inside_radius = distance_meters <= allowed_radius_meters
+
+    return {
+        "is_configured": True,
+        "branch": branch,
+        "branch_latitude": branch.attendance_latitude,
+        "branch_longitude": branch.attendance_longitude,
+        "allowed_radius_meters": allowed_radius_meters,
+        "distance_meters": distance_meters,
+        "is_inside_radius": is_inside_radius,
+        "validation_status": (
+            EmployeeAttendanceEvent.LOCATION_STATUS_INSIDE
+            if is_inside_radius
+            else EmployeeAttendanceEvent.LOCATION_STATUS_OUTSIDE
+        ),
+        "branch_location_label": f"{branch.name} attendance point",
+        "validation_summary": (
+            f"Validated against {branch.name} fixed attendance point. "
+            f"Distance {distance_meters} m of allowed {allowed_radius_meters} m."
+        ),
+    }
+
+
 def sync_attendance_event_to_ledger(event, actor_label="System"):
     if not event or not event.employee_id or not event.check_in_at or not event.check_out_at:
         return None
@@ -254,10 +321,24 @@ def sync_attendance_event_to_ledger(event, actor_label="System"):
         location_bits.append(
             f"Check-in coordinates: {event.check_in_latitude}, {event.check_in_longitude}"
         )
+    if event.check_in_distance_meters is not None:
+        location_bits.append(
+            f"Check-in validation: {event.get_check_in_location_validation_status_display() or event.check_in_location_validation_status} at {event.check_in_distance_meters} m"
+        )
     if event.check_out_latitude is not None and event.check_out_longitude is not None:
         location_bits.append(
             f"Check-out coordinates: {event.check_out_latitude}, {event.check_out_longitude}"
         )
+    if event.check_out_distance_meters is not None:
+        location_bits.append(
+            f"Check-out validation: {event.get_check_out_location_validation_status_display() or event.check_out_location_validation_status} at {event.check_out_distance_meters} m"
+        )
+    if event.branch_latitude_used is not None and event.branch_longitude_used is not None:
+        location_bits.append(
+            f"Branch point used: {event.branch_latitude_used}, {event.branch_longitude_used}"
+        )
+    if event.attendance_radius_meters_used is not None:
+        location_bits.append(f"Allowed radius: {event.attendance_radius_meters_used} m")
     event_note = "Self-service attendance"
     if location_bits:
         event_note = f"{event_note}. {' | '.join(location_bits)}"
@@ -925,10 +1006,88 @@ def build_attendance_summary(attendance_entries):
     }
 
 
-def build_attendance_management_filter_state(request):
+def apply_attendance_management_form_scope(form, user):
+    if not form:
+        return form
+
+    scoped_branch = get_user_scope_branch(user)
+    employee_queryset = get_employee_directory_queryset_for_user(
+        user,
+        Employee.objects.select_related(
+            "company",
+            "branch",
+            "department",
+            "section",
+            "job_title",
+        ),
+    ).order_by("full_name", "employee_id")
+
+    form.fields["employee"].queryset = employee_queryset
+
+    if is_branch_scoped_supervisor(user) and scoped_branch:
+        form.fields["company"].queryset = Company.objects.filter(
+            id=scoped_branch.company_id,
+            is_active=True,
+        ).order_by("name")
+        form.fields["branch"].queryset = Branch.objects.filter(
+            id=scoped_branch.id,
+            is_active=True,
+        ).order_by("name")
+        form.fields["department"].queryset = Department.objects.filter(
+            company_id=scoped_branch.company_id,
+            is_active=True,
+        ).order_by("name")
+        form.fields["section"].queryset = Section.objects.filter(
+            department__company_id=scoped_branch.company_id,
+            is_active=True,
+        ).order_by("name")
+        return form
+
+    form.fields["company"].queryset = Company.objects.filter(is_active=True).order_by("name")
+    form.fields["branch"].queryset = Branch.objects.filter(is_active=True).order_by("name")
+    form.fields["department"].queryset = Department.objects.filter(is_active=True).order_by("name")
+    form.fields["section"].queryset = Section.objects.filter(is_active=True).order_by("name")
+    return form
+
+
+def build_attendance_history_pagination(page_obj):
+    if not page_obj:
+        return []
+
+    paginator = page_obj.paginator
+    current_page = page_obj.number
+    total_pages = paginator.num_pages
+    page_numbers = {1, total_pages}
+
+    for page_number in range(current_page - 1, current_page + 2):
+        if 1 <= page_number <= total_pages:
+            page_numbers.add(page_number)
+
+    sorted_pages = sorted(page_numbers)
+    pagination_items = []
+    previous_page = None
+
+    for page_number in sorted_pages:
+        if previous_page is not None and page_number - previous_page > 1:
+            pagination_items.append({"type": "ellipsis"})
+        pagination_items.append(
+            {
+                "type": "page",
+                "number": page_number,
+                "is_current": page_number == current_page,
+            }
+        )
+        previous_page = page_number
+
+    return pagination_items
+
+
+def build_attendance_management_filter_state(request, user=None):
     initial = AttendanceManagementFilterForm.default_initial()
     has_query = bool(request.GET)
     form = AttendanceManagementFilterForm(request.GET or None, initial=initial)
+    if user is not None:
+        apply_attendance_management_form_scope(form, user)
 
     today = timezone.localdate()
     start_date = initial["start_date"]
@@ -968,6 +1127,8 @@ def build_attendance_management_filter_state(request):
         filter_type = AttendanceFilterForm.FILTER_ALL
     else:
         form = AttendanceManagementFilterForm(initial=initial)
+        if user is not None:
+            apply_attendance_management_form_scope(form, user)
 
     if filter_type == AttendanceFilterForm.FILTER_CUSTOM and start_date and end_date:
         period_label = f"{start_date:%b %d, %Y} to {end_date:%b %d, %Y}"
@@ -3890,6 +4051,10 @@ def self_service_attendance_page(request):
         )
 
     today = timezone.localdate()
+    branch = getattr(employee, "branch", None)
+    branch_has_attendance_location_config = bool(
+        branch and getattr(branch, "has_attendance_location_config", False)
+    )
     attendance_event = (
         employee.attendance_events.filter(attendance_date=today).select_related("synced_ledger").first()
     )
@@ -3897,9 +4062,40 @@ def self_service_attendance_page(request):
     if request.method == "POST":
         action = (request.POST.get("attendance_action") or "").strip()
         form = EmployeeSelfServiceAttendanceForm(request.POST)
+        if not branch_has_attendance_location_config:
+            form.add_error(
+                None,
+                "Your branch does not have a fixed attendance point configured yet. Please contact HR or Operations.",
+            )
+        elif action not in {"check_in", "check_out"}:
+            form.add_error(None, "Unknown attendance action requested.")
+
         if form.is_valid():
             actor_label = get_actor_label(request.user) or employee.full_name
-            location_label = build_attendance_location_label(form.cleaned_data)
+            validation_result = get_branch_attendance_validation_result(
+                employee,
+                form.cleaned_data["latitude"],
+                form.cleaned_data["longitude"],
+            )
+            if not validation_result["is_configured"]:
+                form.add_error(None, validation_result["error_message"])
+            elif not validation_result["is_inside_radius"]:
+                form.add_error(
+                    None,
+                    (
+                        f"Attendance denied. You are {validation_result['distance_meters']} m away from "
+                        f"{validation_result['branch'].name}. Allowed radius is "
+                        f"{validation_result['allowed_radius_meters']} m."
+                    ),
+                )
+
+        if form.is_valid():
+            actor_label = get_actor_label(request.user) or employee.full_name
+            validation_result = get_branch_attendance_validation_result(
+                employee,
+                form.cleaned_data["latitude"],
+                form.cleaned_data["longitude"],
+            )
             now = timezone.localtime()
             attendance_event, _created = EmployeeAttendanceEvent.objects.get_or_create(
                 employee=employee,
@@ -3917,12 +4113,23 @@ def self_service_attendance_page(request):
                     attendance_event.check_in_at = now
                     attendance_event.check_in_latitude = form.cleaned_data.get("latitude")
                     attendance_event.check_in_longitude = form.cleaned_data.get("longitude")
-                    attendance_event.check_in_location_label = location_label
-                    attendance_event.check_in_address = form.cleaned_data.get("location_address") or ""
+                    attendance_event.check_in_location_label = validation_result["branch_location_label"]
+                    attendance_event.check_in_address = validation_result["validation_summary"]
+                    attendance_event.branch_latitude_used = validation_result["branch_latitude"]
+                    attendance_event.branch_longitude_used = validation_result["branch_longitude"]
+                    attendance_event.attendance_radius_meters_used = validation_result["allowed_radius_meters"]
+                    attendance_event.check_in_distance_meters = validation_result["distance_meters"]
+                    attendance_event.check_in_location_validation_status = validation_result["validation_status"]
                     attendance_event.notes = form.cleaned_data.get("notes") or ""
                     attendance_event.status = EmployeeAttendanceEvent.STATUS_OPEN
                     attendance_event.save()
-                    messages.success(request, "Check-in registered successfully.")
+                    messages.success(
+                        request,
+                        (
+                            f"Check-in registered successfully. Device location validated at "
+                            f"{validation_result['distance_meters']} m from the branch point."
+                        ),
+                    )
             elif action == "check_out":
                 if not attendance_event.check_in_at:
                     messages.error(request, "Please check in first before checking out.")
@@ -3932,8 +4139,13 @@ def self_service_attendance_page(request):
                     attendance_event.check_out_at = now
                     attendance_event.check_out_latitude = form.cleaned_data.get("latitude")
                     attendance_event.check_out_longitude = form.cleaned_data.get("longitude")
-                    attendance_event.check_out_location_label = location_label
-                    attendance_event.check_out_address = form.cleaned_data.get("location_address") or ""
+                    attendance_event.check_out_location_label = validation_result["branch_location_label"]
+                    attendance_event.check_out_address = validation_result["validation_summary"]
+                    attendance_event.branch_latitude_used = validation_result["branch_latitude"]
+                    attendance_event.branch_longitude_used = validation_result["branch_longitude"]
+                    attendance_event.attendance_radius_meters_used = validation_result["allowed_radius_meters"]
+                    attendance_event.check_out_distance_meters = validation_result["distance_meters"]
+                    attendance_event.check_out_location_validation_status = validation_result["validation_status"]
                     if form.cleaned_data.get("notes"):
                         attendance_event.notes = form.cleaned_data["notes"]
                     attendance_event.status = EmployeeAttendanceEvent.STATUS_COMPLETED
@@ -3946,14 +4158,22 @@ def self_service_attendance_page(request):
                             description=(
                                 f"Check-in: {timezone.localtime(attendance_event.check_in_at):%I:%M %p}. "
                                 f"Check-out: {timezone.localtime(attendance_event.check_out_at):%I:%M %p}. "
-                                f"Shift: {synced_ledger.get_shift_display()}."
+                                f"Shift: {synced_ledger.get_shift_display()}. "
+                                f"Check-in distance: {attendance_event.check_in_distance_meters or 0} m. "
+                                f"Check-out distance: {attendance_event.check_out_distance_meters or 0} m."
                             ),
                             event_type=EmployeeHistory.EVENT_STATUS,
                             created_by=actor_label,
                             is_system_generated=True,
                             event_date=today,
                         )
-                    messages.success(request, "Check-out registered and synced to attendance management.")
+                    messages.success(
+                        request,
+                        (
+                            f"Check-out registered and synced to attendance management. Device location validated at "
+                            f"{validation_result['distance_meters']} m from the branch point."
+                        ),
+                    )
             return redirect("employees:self_service_attendance")
         messages.error(request, "Please review the attendance details and try again.")
     else:
@@ -3962,6 +4182,16 @@ def self_service_attendance_page(request):
             initial["shift"] = attendance_event.shift
         form = EmployeeSelfServiceAttendanceForm(initial=initial)
 
+    attendance_history_queryset = employee.attendance_events.select_related("synced_ledger").order_by(
+        "-attendance_date",
+        "-check_in_at",
+        "-id",
+    )
+    attendance_history_paginator = Paginator(attendance_history_queryset, 8)
+    attendance_history_page_obj = attendance_history_paginator.get_page(request.GET.get("page"))
+    attendance_history_query_params = request.GET.copy()
+    attendance_history_query_params.pop("page", None)
+
     context = build_self_service_page_context(
         request,
         employee,
@@ -3969,7 +4199,17 @@ def self_service_attendance_page(request):
     )
     context["attendance_event_today"] = attendance_event
     context["attendance_self_service_form"] = form
-    context["recent_attendance_events"] = list(employee.attendance_events.select_related("synced_ledger")[:7])
+    context["recent_attendance_events"] = list(attendance_history_page_obj.object_list)
+    context["recent_attendance_page_obj"] = attendance_history_page_obj
+    context["recent_attendance_pagination_items"] = build_attendance_history_pagination(
+        attendance_history_page_obj
+    )
+    context["recent_attendance_querystring"] = attendance_history_query_params.urlencode()
+    context["attendance_branch"] = branch
+    context["attendance_branch_has_location_config"] = branch_has_attendance_location_config
+    context["attendance_branch_latitude"] = getattr(branch, "attendance_latitude", None)
+    context["attendance_branch_longitude"] = getattr(branch, "attendance_longitude", None)
+    context["attendance_branch_radius_meters"] = getattr(branch, "attendance_radius_meters", None)
     context["today"] = today
     return render(request, "employees/self_service_attendance.html", context)
 
@@ -5330,15 +5570,18 @@ def employee_attendance_correction_reject(request, correction_pk):
     return redirect(next_url)
 
 
-@login_required
-def attendance_management(request):
-    if not can_view_attendance_management(request.user):
-        return deny_employee_access(
-            request,
-            "You do not have permission to access attendance management.",
-        )
-
-    filter_state = build_attendance_management_filter_state(request)
+def build_attendance_history_management_context(request, *, supervisor_history_only=False):
+    filter_state = build_attendance_management_filter_state(request, user=request.user)
+    scoped_employee_queryset = get_employee_directory_queryset_for_user(
+        request.user,
+        Employee.objects.select_related(
+            "company",
+            "branch",
+            "department",
+            "section",
+            "job_title",
+        ).all(),
+    )
 
     attendance_queryset = EmployeeAttendanceLedger.objects.select_related(
         "employee",
@@ -5349,7 +5592,7 @@ def attendance_management(request):
         "employee__job_title",
         "linked_leave",
         "linked_action_record",
-    ).all()
+    ).filter(employee__in=scoped_employee_queryset)
 
     if filter_state["search_value"]:
         search_value = filter_state["search_value"]
@@ -5482,13 +5725,14 @@ def attendance_management(request):
 
     paginator = Paginator(attendance_queryset, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
+    pagination_items = build_attendance_history_pagination(page_obj)
 
     correction_queryset = EmployeeAttendanceCorrection.objects.select_related(
         "employee",
         "linked_attendance",
         "requested_by",
         "reviewed_by",
-    ).all()
+    ).filter(employee__in=scoped_employee_queryset)
 
     if filter_state["search_value"]:
         search_value = filter_state["search_value"]
@@ -5518,12 +5762,12 @@ def attendance_management(request):
         correction_queryset = correction_queryset.filter(linked_attendance__attendance_date__lte=filter_state["end_date"])
 
     correction_queryset = correction_queryset.order_by("-created_at", "-id")
-    correction_records = list(correction_queryset[:50])
+    correction_records = list(correction_queryset[:50]) if not supervisor_history_only else []
 
     selected_attendance_record = None
     correction_form = None
     correction_target = request.GET.get("correct", "").strip()
-    if correction_target:
+    if correction_target and not supervisor_history_only:
         try:
             target_pk = int(correction_target)
         except ValueError:
@@ -5551,15 +5795,39 @@ def attendance_management(request):
     action_querystring_data.pop("correct", None)
     attendance_management_querystring = querystring_data.urlencode()
     attendance_management_base_querystring = action_querystring_data.urlencode()
-    attendance_management_base_url = reverse("employees:attendance_management")
+    attendance_route_name = (
+        "employees:supervisor_attendance_history"
+        if supervisor_history_only
+        else "employees:attendance_management"
+    )
+    attendance_management_base_url = reverse(attendance_route_name)
     if attendance_management_base_querystring:
         attendance_management_base_url = (
             f"{attendance_management_base_url}?{attendance_management_base_querystring}"
         )
 
+    scoped_branch = get_user_scope_branch(request.user)
+    page_title = "Attendance History"
+    page_subtitle = (
+        "Management attendance history for filtering, auditing, and reviewing all employee attendance records inside your existing management scope."
+    )
+    ledger_subtitle = "Filtered company-wide attendance records with quick access back to each employee profile."
+    empty_message = "Adjust the filters or start creating attendance ledger entries from employee profiles."
+    back_button_label = "Back to Directory"
+
+    if supervisor_history_only and scoped_branch:
+        page_title = "Team Attendance History"
+        page_subtitle = (
+            f"Supervisor attendance history for {scoped_branch.name}. Only team members inside your current supervisor scope appear here."
+        )
+        ledger_subtitle = "Branch-scoped attendance history with click-only detail sections, reduced initial load, and no management-wide controls."
+        empty_message = "No attendance history matched the current team filters."
+        back_button_label = "Back to Team Directory"
+
     context = {
         "attendance_page_obj": page_obj,
         "attendance_records": page_obj.object_list,
+        "attendance_pagination_items": pagination_items,
         "attendance_filter_form": filter_state["form"],
         "attendance_period_label": filter_state["period_label"],
         "attendance_filter_applied": filter_state["is_applied"],
@@ -5571,9 +5839,9 @@ def attendance_management(request):
         "selected_attendance_record": selected_attendance_record,
         "attendance_correction_form": correction_form,
         "attendance_correction_records": correction_records,
-        "attendance_correction_pending_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_PENDING).count(),
-        "attendance_correction_applied_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_APPLIED).count(),
-        "attendance_correction_rejected_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_REJECTED).count(),
+        "attendance_correction_pending_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_PENDING).count() if not supervisor_history_only else 0,
+        "attendance_correction_applied_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_APPLIED).count() if not supervisor_history_only else 0,
+        "attendance_correction_rejected_count": correction_queryset.filter(status=EmployeeAttendanceCorrection.STATUS_REJECTED).count() if not supervisor_history_only else 0,
         "attendance_snapshot_date": snapshot_date,
         "attendance_snapshot_note": attendance_snapshot_note,
         "attendance_snapshot_scope_count": len(snapshot_scope_employees),
@@ -5587,9 +5855,44 @@ def attendance_management(request):
         "half_day_attendance_count": sum(1 for entry in attendance_entries if entry.day_status == EmployeeAttendanceLedger.DAY_STATUS_PRESENT and entry.worked_hours and entry.worked_hours < entry.scheduled_hours),
         "early_exit_flag_count": sum(1 for entry in attendance_entries if (entry.early_departure_minutes or 0) > 0),
         "overtime_ready_count": sum(1 for entry in attendance_entries if (entry.overtime_minutes or 0) > 0),
+        "attendance_history_is_supervisor_scope": supervisor_history_only,
+        "attendance_history_page_title": page_title,
+        "attendance_history_page_subtitle": page_subtitle,
+        "attendance_history_snapshot_title": "Team Snapshot" if supervisor_history_only else "Daily Attendance Snapshot",
+        "attendance_history_ledger_subtitle": ledger_subtitle,
+        "attendance_history_back_button_label": back_button_label,
+        "attendance_history_empty_message": empty_message,
+        "attendance_history_can_request_correction": not supervisor_history_only,
+        "attendance_history_can_view_corrections": not supervisor_history_only,
+        "attendance_history_route_name": attendance_route_name,
+        "attendance_history_show_compact_summary": supervisor_history_only,
     }
     context.update(attendance_summary)
 
+    return context
+
+
+@login_required
+def attendance_management(request):
+    if not can_view_attendance_management(request.user):
+        return deny_employee_access(
+            request,
+            "You do not have permission to access attendance management.",
+        )
+
+    context = build_attendance_history_management_context(request, supervisor_history_only=False)
+    return render(request, "employees/attendance_management.html", context)
+
+
+@login_required
+def supervisor_attendance_history(request):
+    if not is_branch_scoped_supervisor(request.user):
+        return deny_employee_access(
+            request,
+            "You do not have permission to access team attendance history.",
+        )
+
+    context = build_attendance_history_management_context(request, supervisor_history_only=True)
     return render(request, "employees/attendance_management.html", context)
 
 
@@ -6670,12 +6973,9 @@ def build_request_overview_groups(request_cards):
                     "document_total": day_entry["document_total"],
                     "items": day_entry["items"],
                     "is_today": request_date == today,
-                    "is_open": request_date == today,
+                    "is_open": False,
                 }
             )
-
-        if ordered_days and not any(day["is_open"] for day in ordered_days) and week_start == current_week_start:
-            ordered_days[0]["is_open"] = True
 
         grouped_weeks.append(
             {
@@ -6687,14 +6987,9 @@ def build_request_overview_groups(request_cards):
                 "document_total": week_entry["document_total"],
                 "days": ordered_days,
                 "is_current_week": week_start == current_week_start,
-                "is_open": week_start == current_week_start,
+                "is_open": False,
             }
         )
-
-    if grouped_weeks and not any(week["is_open"] for week in grouped_weeks):
-        grouped_weeks[0]["is_open"] = True
-        if grouped_weeks[0]["days"] and not any(day["is_open"] for day in grouped_weeks[0]["days"]):
-            grouped_weeks[0]["days"][0]["is_open"] = True
 
     return grouped_weeks
 

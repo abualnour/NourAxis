@@ -21,53 +21,64 @@
         </div>
     </div>
 
-    <div class="summary-grid">
-        <div class="summary-card">
-            <span class="summary-label">Total Requests</span>
-            <span class="summary-value">{{ request_total }}</span>
-        </div>
-        <div class="summary-card">
-            <span class="summary-label">Pending</span>
-            <span class="summary-value">{{ pending_total }}</span>
-        </div>
-        <div class="summary-card">
-            <span class="summary-label">Approved</span>
-            <span class="summary-value">{{ approved_total }}</span>
-        </div>
-        <div class="summary-card">
-            <span class="summary-label">Submitted Files</span>
-            <span class="summary-value">{{ documents_total }}</span>
-        </div>
-    </div>
+    <details class="card request-overview-card summary-disclosure-card">
+        <summary class="summary-disclosure-toggle">
+            <div>
+                <h2>Request Summary</h2>
+                <p class="page-subtitle">Open when you need the request totals and live review-lane counts for the visible scope.</p>
+            </div>
+            <span class="badge badge-light">Collapsed by Default</span>
+        </summary>
+        <div class="card-body summary-disclosure-body">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <span class="summary-label">Total Requests</span>
+                    <span class="summary-value">{{ request_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Pending</span>
+                    <span class="summary-value">{{ pending_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Approved</span>
+                    <span class="summary-value">{{ approved_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Submitted Files</span>
+                    <span class="summary-value">{{ documents_total }}</span>
+                </div>
+            </div>
 
-    <div class="summary-grid">
-        <div class="summary-card">
-            <span class="summary-label">My Review Queue</span>
-            <span class="summary-value">{{ my_stage_pending_total }}</span>
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <span class="summary-label">My Review Queue</span>
+                    <span class="summary-value">{{ my_stage_pending_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Waiting for Supervisor</span>
+                    <span class="summary-value">{{ waiting_supervisor_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Waiting for Operations</span>
+                    <span class="summary-value">{{ waiting_operations_total }}</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Waiting for HR</span>
+                    <span class="summary-value">{{ waiting_hr_total }}</span>
+                </div>
+            </div>
         </div>
-        <div class="summary-card">
-            <span class="summary-label">Waiting for Supervisor</span>
-            <span class="summary-value">{{ waiting_supervisor_total }}</span>
-        </div>
-        <div class="summary-card">
-            <span class="summary-label">Waiting for Operations</span>
-            <span class="summary-value">{{ waiting_operations_total }}</span>
-        </div>
-        <div class="summary-card">
-            <span class="summary-label">Waiting for HR</span>
-            <span class="summary-value">{{ waiting_hr_total }}</span>
-        </div>
-    </div>
+    </details>
 
-    <section class="card request-overview-card request-queue-card">
-        <div class="card-header request-queue-card-header">
+    <details class="card request-overview-card request-queue-card summary-disclosure-card">
+        <summary class="summary-disclosure-toggle">
             <div>
                 <h2>Approval Queue Visibility</h2>
                 <p class="card-subtitle">A cleaner snapshot of the workflow lane you are currently reviewing and the requests already closed.</p>
             </div>
-            <span class="badge badge-light">Live Queue Snapshot</span>
-        </div>
-        <div class="card-body request-queue-card-body">
+            <span class="badge badge-light">Collapsed by Default</span>
+        </summary>
+        <div class="card-body request-queue-card-body summary-disclosure-body">
             <div class="request-queue-focus-band">
                 <span class="request-queue-focus-label">Current Review Focus</span>
                 <strong class="request-queue-focus-value">{{ current_leave_review_stage_label }}</strong>
@@ -91,7 +102,7 @@
                 </div>
             </div>
         </div>
-    </section>
+    </details>
 
     <section class="card request-overview-card request-filter-panel-card">
         <div class="card-header request-filter-panel-header">
@@ -189,7 +200,7 @@
 
     <div class="requests-overview-stack">
         {% for week_group in grouped_request_weeks %}
-            <details class="request-week-group" {% if week_group.is_open %}open{% endif %}>
+            <details class="request-week-group">
                 <summary class="request-week-summary">
                     <div class="request-group-heading">
                         <h2>{{ week_group.label }}</h2>
@@ -209,7 +220,7 @@
 
                 <div class="request-week-days">
                     {% for day_group in week_group.days %}
-                        <details class="request-day-group" {% if day_group.is_open %}open{% endif %}>
+                        <details class="request-day-group">
                             <summary class="request-day-summary">
                                 <div class="request-group-heading">
                                     <h3>{{ day_group.label }}</h3>
@@ -652,17 +663,18 @@
     </div>
 
 
-    <div class="card request-overview-card" style="margin-top: 24px;">
-        <div class="card-header">
-            <div class="section-heading">
-                <div>
-                    <h2>Employee Document Request Queue</h2>
-                    <p class="page-subtitle">Employee-originated requests for salary certificates, HR letters, and other management-delivered files.</p>
-                </div>
-                <span class="badge badge-primary">{{ employee_document_request_total }} Request{{ employee_document_request_total|pluralize }}</span>
+    <details class="card request-overview-card summary-disclosure-card" style="margin-top: 24px;">
+        <summary class="summary-disclosure-toggle">
+            <div>
+                <h2>Employee Document Request Queue</h2>
+                <p class="page-subtitle">Employee-originated requests for salary certificates, HR letters, and other management-delivered files.</p>
             </div>
-        </div>
-        <div class="card-body">
+            <div class="page-actions">
+                <span class="badge badge-primary">{{ employee_document_request_total }} Request{{ employee_document_request_total|pluralize }}</span>
+                <span class="badge badge-light">Collapsed by Default</span>
+            </div>
+        </summary>
+        <div class="card-body summary-disclosure-body">
             <div class="summary-grid" style="margin-bottom: 18px;">
                 <div class="summary-card"><span class="summary-label">Requested</span><span class="summary-value">{{ employee_document_request_requested_total }}</span></div>
                 <div class="summary-card"><span class="summary-label">Approved / In Progress</span><span class="summary-value">{{ employee_document_request_approved_total }}</span></div>
@@ -729,19 +741,20 @@
                 </div>
             {% endif %}
         </div>
-    </div>
+    </details>
 
-    <div class="card request-overview-card request-documents-overview-card request-documents-overview-card-compact">
-        <div class="card-header request-documents-overview-header">
+    <details class="card request-overview-card request-documents-overview-card request-documents-overview-card-compact summary-disclosure-card">
+        <summary class="summary-disclosure-toggle request-documents-overview-header">
             <div>
                 <h2>Uploaded Employee Documents</h2>
                 <p class="card-subtitle">Compact grouped file history for follow-up, compliance checks, and quick employee document review.</p>
             </div>
             <div class="page-actions">
                 <span class="badge badge-primary">{{ employee_documents_total }} File{{ employee_documents_total|pluralize }}</span>
+                <span class="badge badge-light">Collapsed by Default</span>
             </div>
-        </div>
-        <div class="card-body">
+        </summary>
+        <div class="card-body summary-disclosure-body">
             {% if latest_employee_document_groups %}
                 <div class="request-document-group-grid request-document-group-grid-compact">
                     {% for document_group in latest_employee_document_groups %}
@@ -836,6 +849,6 @@
                 </div>
             {% endif %}
         </div>
-    </div>
+    </details>
 </div>
 {% endblock %}

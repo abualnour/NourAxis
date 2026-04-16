@@ -50,6 +50,9 @@ class BranchForm(BaseStyledModelForm):
             "name",
             "city",
             "email",
+            "attendance_latitude",
+            "attendance_longitude",
+            "attendance_radius_meters",
             "image",
             "notes",
             "is_active",
@@ -58,6 +61,18 @@ class BranchForm(BaseStyledModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["company"].queryset = Company.objects.filter(is_active=True).order_by("name")
+        self.fields["attendance_latitude"].help_text = (
+            "Fixed branch attendance latitude used for live employee attendance validation."
+        )
+        self.fields["attendance_longitude"].help_text = (
+            "Fixed branch attendance longitude used for live employee attendance validation."
+        )
+        self.fields["attendance_radius_meters"].help_text = (
+            "Allowed distance in meters from the fixed branch attendance point."
+        )
+        self.fields["attendance_latitude"].widget.attrs.setdefault("placeholder", "Example: 29.375900")
+        self.fields["attendance_longitude"].widget.attrs.setdefault("placeholder", "Example: 47.977400")
+        self.fields["attendance_radius_meters"].widget.attrs.setdefault("placeholder", "Example: 120")
 
 
 class DepartmentForm(BaseStyledModelForm):

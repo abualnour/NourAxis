@@ -4,6 +4,7 @@ from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -363,6 +364,50 @@ def build_requirement_summary(rows):
             summary["requirement_recorded_total"] += 1
 
     return summary
+
+
+def build_numbered_pagination_items(page_obj, window=1):
+    if not page_obj or page_obj.paginator.num_pages <= 1:
+        return []
+
+    current_page = page_obj.number
+    total_pages = page_obj.paginator.num_pages
+    visible_numbers = {1, total_pages}
+
+    for page_number in range(current_page - window, current_page + window + 1):
+        if 1 <= page_number <= total_pages:
+            visible_numbers.add(page_number)
+
+    items = []
+    last_number = None
+    for page_number in sorted(visible_numbers):
+        if last_number is not None and page_number - last_number > 1:
+            items.append({"type": "ellipsis"})
+        items.append(
+            {
+                "type": "page",
+                "number": page_number,
+                "is_current": page_number == current_page,
+            }
+        )
+        last_number = page_number
+
+    return items
+
+
+def build_updated_querystring(request, excluded_keys=None, **updates):
+    query_data = request.GET.copy()
+
+    for key in excluded_keys or []:
+        query_data.pop(key, None)
+
+    for key, value in updates.items():
+        if value in (None, ""):
+            query_data.pop(key, None)
+        else:
+            query_data[key] = value
+
+    return query_data.urlencode()
 
 
 def get_branch_compliance_status_payload(summary):
@@ -1086,6 +1131,22 @@ class BranchDetailView(OrganizationBaseDetailView):
             {"label": "Company", "value": branch.company.name},
             {"label": "City", "value": format_text(getattr(branch, "city", ""))},
             {"label": "Email", "value": format_text(getattr(branch, "email", ""))},
+            {
+                "label": "Attendance Point",
+                "value": (
+                    f"{branch.attendance_latitude}, {branch.attendance_longitude}"
+                    if branch.has_attendance_location_config
+                    else "Not configured"
+                ),
+            },
+            {
+                "label": "Attendance Radius",
+                "value": (
+                    f"{branch.attendance_radius_meters} meters"
+                    if branch.has_attendance_location_config
+                    else "Not configured"
+                ),
+            },
             {"label": "Notes", "value": format_text(branch.notes)},
         ]
         context["stat_cards"] = [
@@ -1258,11 +1319,45 @@ class BranchDocumentListView(LoginRequiredMixin, ListView):
     def get_scope_branch(self):
         return get_supervisor_scoped_branch(self.request.user)
 
+    def get_branch_picker_search_value(self):
+        return (self.request.GET.get("branch_search") or "").strip()
+
     def get_selected_branch_id(self):
         scoped_branch = self.get_scope_branch()
         if scoped_branch:
             return str(scoped_branch.pk)
         return (self.request.GET.get("branch") or "").strip()
+
+    def should_open_branch_workspace(self):
+        scoped_branch = self.get_scope_branch()
+        if scoped_branch:
+            return True
+        return (self.request.GET.get("workspace") or "").strip() == "1"
+
+    def get_branch_picker_queryset(self):
+        scoped_branch = self.get_scope_branch()
+        queryset = (
+            Branch.objects.select_related("company")
+            .annotate(
+                employee_total=Count("employees", distinct=True),
+                document_total=Count("documents", distinct=True),
+            )
+            .order_by("company__name", "name")
+        )
+
+        if scoped_branch:
+            return queryset.filter(pk=scoped_branch.pk)
+
+        branch_search_value = self.get_branch_picker_search_value()
+        if branch_search_value:
+            queryset = queryset.filter(
+                Q(name__icontains=branch_search_value)
+                | Q(company__name__icontains=branch_search_value)
+                | Q(code__icontains=branch_search_value)
+                | Q(manager_name__icontains=branch_search_value)
+            )
+
+        return queryset
 
     def get_queryset(self):
         queryset = (
@@ -1279,6 +1374,12 @@ class BranchDocumentListView(LoginRequiredMixin, ListView):
         document_type = (self.request.GET.get("document_type") or "").strip()
         status_filter = (self.request.GET.get("status") or "").strip()
         search_value = (self.request.GET.get("search") or "").strip()
+
+        if not branch_id and not scoped_branch:
+            return queryset.none()
+
+        if not self.should_open_branch_workspace() and not scoped_branch:
+            return queryset.none()
 
         if branch_id:
             queryset = queryset.filter(branch_id=branch_id)
@@ -1333,17 +1434,27 @@ class BranchDocumentListView(LoginRequiredMixin, ListView):
             if is_branch_scoped_supervisor
             else Branch.objects.select_related("company").order_by("company__name", "name")
         )
+        branch_picker_queryset = self.get_branch_picker_queryset()
+        branch_picker_paginator = Paginator(branch_picker_queryset, 6)
+        branch_picker_page = branch_picker_paginator.get_page(
+            (self.request.GET.get("branch_page") or "").strip() or 1
+        )
+        branch_picker_results = list(branch_picker_page.object_list)
 
         branch_id = self.get_selected_branch_id()
         document_type = (self.request.GET.get("document_type") or "").strip()
         status_filter = (self.request.GET.get("status") or "").strip()
         search_value = (self.request.GET.get("search") or "").strip()
+        branch_search_value = self.get_branch_picker_search_value()
+
+        branch_workspace_is_selected = self.should_open_branch_workspace() and bool(branch_id)
 
         upload_branch = None
-        if branch_id:
+        if branch_workspace_is_selected:
             upload_branch = Branch.objects.select_related("company").filter(pk=branch_id).first()
         if is_branch_scoped_supervisor and scoped_branch:
             upload_branch = scoped_branch
+            branch_workspace_is_selected = True
 
         branch_document_form = kwargs.get("branch_document_form") or BranchDocumentForm()
         requirement_form = kwargs.get("branch_document_requirement_form") or BranchDocumentRequirementForm()
@@ -1378,8 +1489,29 @@ class BranchDocumentListView(LoginRequiredMixin, ListView):
             else "Upload and monitor store licenses, legal documents, permits, lease files, and other important branch records across all branches."
         )
         context["branch_choices"] = branch_choices
+        context["branch_picker_results"] = branch_picker_results
+        context["branch_picker_page"] = branch_picker_page
+        context["branch_picker_paginator"] = branch_picker_paginator
+        context["branch_picker_pagination_items"] = build_numbered_pagination_items(branch_picker_page)
+        context["branch_picker_search_value"] = branch_search_value
+        context["branch_picker_search_querystring"] = build_updated_querystring(
+            self.request,
+            excluded_keys=["branch_search", "branch_page"],
+        )
+        context["branch_picker_page_querystring"] = build_updated_querystring(
+            self.request,
+            excluded_keys=["branch_page"],
+        )
+        context["branch_picker_select_querystring"] = build_updated_querystring(
+            self.request,
+            excluded_keys=["branch", "page", "workspace"],
+        )
+        context["document_registry_querystring"] = build_updated_querystring(
+            self.request,
+            excluded_keys=["page"],
+        )
         context["document_type_choices"] = BranchDocument.DOCUMENT_TYPE_CHOICES
-        context["selected_branch"] = branch_id
+        context["selected_branch"] = branch_id if branch_workspace_is_selected else ""
         context["selected_document_type"] = document_type
         context["selected_status"] = status_filter
         context["search_value"] = search_value
@@ -1407,6 +1539,7 @@ class BranchDocumentListView(LoginRequiredMixin, ListView):
         context["branch_document_form"] = branch_document_form
         context["branch_document_requirement_form"] = requirement_form
         context["upload_branch"] = upload_branch
+        context["branch_workspace_is_selected"] = branch_workspace_is_selected
         context["branch_document_create_url"] = (
             reverse("organization:branch_document_create", kwargs={"pk": upload_branch.pk})
             if upload_branch

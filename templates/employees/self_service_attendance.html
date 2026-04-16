@@ -18,7 +18,7 @@
     <div class="page-header employee-profile-header">
         <div>
             <h1 class="page-title">Daily Attendance</h1>
-            <p class="page-subtitle">Check in and check out with a live map location, keep a clean attendance trail, and sync every record into working time and payroll-ready attendance history.</p>
+            <p class="page-subtitle">Check in and check out with live device geolocation, validate every attendance action against your branch fixed location, and keep a clean attendance trail synced into payroll-ready history.</p>
         </div>
         <div class="page-actions">
             <a class="btn btn-light" href="{{ self_service_profile_url }}">Profile</a>
@@ -82,23 +82,46 @@
                         <div class="attendance-map-shell">
                             <div class="attendance-map-toolbar">
                                 <div>
-                                    <strong>Live Attendance Map</strong>
-                                    <p>Select your current attendance point from the map or use your device location. The selected point is stored with the attendance record and synced to the official ledger.</p>
+                                    <strong>Branch Attendance Validation</strong>
+                                    <p>
+                                        Attendance uses your branch fixed location and your device live geolocation only.
+                                        The map is display-only and backend distance validation decides whether attendance is allowed.
+                                    </p>
                                 </div>
                                 <div class="page-actions">
-                                    <button class="btn btn-light" type="button" id="capture-location-btn">Use My Location</button>
-                                    <button class="btn btn-secondary" type="button" id="clear-location-btn">Clear Point</button>
+                                    <button class="btn btn-light" type="button" id="capture-location-btn" {% if not attendance_branch_has_location_config %}disabled{% endif %}>Get My Live Location</button>
+                                    <button class="btn btn-secondary" type="button" id="clear-location-btn" {% if not attendance_branch_has_location_config %}disabled{% endif %}>Clear Captured Location</button>
                                 </div>
                             </div>
 
                             <div class="attendance-map-grid">
                                 <div class="attendance-map-canvas-wrap">
-                                    <div id="attendance-live-map" class="attendance-live-map"></div>
-                                    <div class="attendance-map-status" id="attendance-map-status">Choose a point from the map before saving attendance.</div>
+                                    <div
+                                        id="attendance-live-map"
+                                        class="attendance-live-map"
+                                        data-branch-latitude="{{ attendance_branch_latitude|default_if_none:'' }}"
+                                        data-branch-longitude="{{ attendance_branch_longitude|default_if_none:'' }}"
+                                        data-branch-radius="{{ attendance_branch_radius_meters|default_if_none:'' }}"
+                                    ></div>
+                                    <div class="attendance-map-status" id="attendance-map-status">
+                                        {% if attendance_branch_has_location_config %}
+                                            Capture your live device location first. The backend will validate it against {{ attendance_branch.name }}.
+                                        {% else %}
+                                            Your branch does not have a fixed attendance point configured yet. Attendance location validation is blocked until HR or Operations completes the branch setup.
+                                        {% endif %}
+                                    </div>
                                 </div>
 
                                 <div class="attendance-map-details">
                                     <div class="detail-grid two-col attendance-map-preview-grid">
+                                        <div class="detail-item">
+                                            <span class="detail-label">Branch</span>
+                                            <span class="detail-value">{{ attendance_branch.name|default:"No branch assigned" }}</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Allowed Radius</span>
+                                            <span class="detail-value">{% if attendance_branch_radius_meters %}{{ attendance_branch_radius_meters }} meters{% else %}Not configured{% endif %}</span>
+                                        </div>
                                         <div class="detail-item">
                                             <span class="detail-label">Latitude</span>
                                             <span class="detail-value" id="attendance-latitude-preview">Not captured</span>
@@ -107,22 +130,20 @@
                                             <span class="detail-label">Longitude</span>
                                             <span class="detail-value" id="attendance-longitude-preview">Not captured</span>
                                         </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Distance Preview</span>
+                                            <span class="detail-value" id="attendance-distance-preview">Not captured</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Validation Preview</span>
+                                            <span class="detail-value" id="attendance-validation-preview">Waiting for live location</span>
+                                        </div>
                                     </div>
-
-                                    <div class="form-group">
-                                        <label for="{{ attendance_self_service_form.location_label.id_for_label }}">{{ attendance_self_service_form.location_label.label }}</label>
-                                        {{ attendance_self_service_form.location_label }}
-                                        {% for error in attendance_self_service_form.location_label.errors %}
-                                            <div class="form-error">{{ error }}</div>
-                                        {% endfor %}
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label for="{{ attendance_self_service_form.location_address.id_for_label }}">{{ attendance_self_service_form.location_address.label }}</label>
-                                        {{ attendance_self_service_form.location_address }}
-                                        {% for error in attendance_self_service_form.location_address.errors %}
-                                            <div class="form-error">{{ error }}</div>
-                                        {% endfor %}
+                                    <div class="attendance-record-location-block">
+                                        <strong>How validation works</strong>
+                                        <span>1. Capture your live device location.</span>
+                                        <span>2. The system compares it to the fixed branch attendance point.</span>
+                                        <span>3. Attendance is accepted only when the backend confirms you are inside the allowed radius.</span>
                                     </div>
                                 </div>
                             </div>
@@ -150,8 +171,8 @@
                         </div>
 
                         <div class="page-actions">
-                            <button class="btn btn-primary" type="submit" name="attendance_action" value="check_in" {% if attendance_blocked_for_today or attendance_event_today and attendance_event_today.check_in_at %}disabled{% endif %}>Check In</button>
-                            <button class="btn btn-secondary" type="submit" name="attendance_action" value="check_out" {% if attendance_blocked_for_today or not attendance_event_today or not attendance_event_today.check_in_at or attendance_event_today.check_out_at %}disabled{% endif %}>Check Out</button>
+                            <button class="btn btn-primary" type="submit" name="attendance_action" value="check_in" {% if attendance_blocked_for_today or attendance_event_today and attendance_event_today.check_in_at or not attendance_branch_has_location_config %}disabled{% endif %}>Check In</button>
+                            <button class="btn btn-secondary" type="submit" name="attendance_action" value="check_out" {% if attendance_blocked_for_today or not attendance_event_today or not attendance_event_today.check_in_at or attendance_event_today.check_out_at or not attendance_branch_has_location_config %}disabled{% endif %}>Check Out</button>
                         </div>
                     </form>
                 </div>
@@ -159,59 +180,117 @@
 
             <div class="card detail-card modern-soft-card">
                 <div class="card-header">
-                    <h2>Recent Attendance Records</h2>
+                    <div>
+                        <h2>Attendance History</h2>
+                        <p class="page-subtitle">Open any day only when you need it. History cards stay collapsed by default to keep the page lighter and easier to scan.</p>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if recent_attendance_events %}
                         <div class="summary-list modern-list-gap attendance-records-list">
                             {% for event in recent_attendance_events %}
-                                <div class="summary-list-item attendance-record-card">
-                                    <div class="status-badge-stack document-card-head">
-                                        <strong class="document-card-title">{{ event.attendance_date|date:"F j, Y" }}</strong>
-                                        <span class="badge {% if event.is_checked_out %}badge-success{% else %}badge-warning{% endif %}">{{ event.get_status_display }}</span>
-                                    </div>
-
-                                    <div class="detail-grid two-col attendance-record-grid">
-                                        <div class="detail-item">
-                                            <span class="detail-label">Check In</span>
-                                            <span class="detail-value">{% if event.check_in_at %}{{ event.check_in_at|date:"g:i A" }}{% else %}&mdash;{% endif %}</span>
+                                <details class="summary-list-item attendance-record-card attendance-history-disclosure">
+                                    <summary class="attendance-history-summary">
+                                        <div class="attendance-history-summary-main">
+                                            <strong class="document-card-title">{{ event.attendance_date|date:"F j, Y" }}</strong>
+                                            <span class="attendance-history-summary-meta">{{ event.attendance_date|date:"l" }}</span>
                                         </div>
-                                        <div class="detail-item">
-                                            <span class="detail-label">Check Out</span>
-                                            <span class="detail-value">{% if event.check_out_at %}{{ event.check_out_at|date:"g:i A" }}{% else %}&mdash;{% endif %}</span>
+                                        <div class="attendance-history-summary-side">
+                                            <span class="badge {% if event.is_checked_out %}badge-success{% else %}badge-warning{% endif %}">{{ event.get_status_display }}</span>
+                                            <span class="attendance-history-summary-meta">
+                                                {% if event.check_in_at %}In {{ event.check_in_at|date:"g:i A" }}{% else %}In &mdash;{% endif %}
+                                                {% if event.check_out_at %} • Out {{ event.check_out_at|date:"g:i A" }}{% else %} • Out &mdash;{% endif %}
+                                            </span>
+                                        </div>
+                                    </summary>
+
+                                    <div class="attendance-history-panel">
+                                        <div class="detail-grid two-col attendance-record-grid">
+                                            <div class="detail-item">
+                                                <span class="detail-label">Check In</span>
+                                                <span class="detail-value">{% if event.check_in_at %}{{ event.check_in_at|date:"g:i A" }}{% else %}&mdash;{% endif %}</span>
+                                            </div>
+                                            <div class="detail-item">
+                                                <span class="detail-label">Check Out</span>
+                                                <span class="detail-value">{% if event.check_out_at %}{{ event.check_out_at|date:"g:i A" }}{% else %}&mdash;{% endif %}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="attendance-record-location-block">
+                                            <strong>Check-in location</strong>
+                                            <span>{{ event.check_in_location_label|default:event.check_in_address|default:"Not captured" }}</span>
+                                            {% if event.check_in_address and event.check_in_address != event.check_in_location_label %}
+                                                <small>{{ event.check_in_address }}</small>
+                                            {% endif %}
+                                            {% if event.check_in_location_validation_status %}
+                                                <small>
+                                                    Validation:
+                                                    {{ event.get_check_in_location_validation_status_display }}
+                                                    {% if event.check_in_distance_meters is not None %}at {{ event.check_in_distance_meters }} meters{% endif %}
+                                                </small>
+                                            {% endif %}
+                                            {% if event.check_in_latitude and event.check_in_longitude %}
+                                                <small>Coordinates: {{ event.check_in_latitude }}, {{ event.check_in_longitude }}</small>
+                                                <a class="attendance-map-link" href="https://www.google.com/maps?q={{ event.check_in_latitude }},{{ event.check_in_longitude }}" target="_blank" rel="noopener">Open map</a>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="attendance-record-location-block">
+                                            <strong>Check-out location</strong>
+                                            <span>{{ event.check_out_location_label|default:event.check_out_address|default:"Not captured" }}</span>
+                                            {% if event.check_out_address and event.check_out_address != event.check_out_location_label %}
+                                                <small>{{ event.check_out_address }}</small>
+                                            {% endif %}
+                                            {% if event.check_out_location_validation_status %}
+                                                <small>
+                                                    Validation:
+                                                    {{ event.get_check_out_location_validation_status_display }}
+                                                    {% if event.check_out_distance_meters is not None %}at {{ event.check_out_distance_meters }} meters{% endif %}
+                                                </small>
+                                            {% endif %}
+                                            {% if event.check_out_latitude and event.check_out_longitude %}
+                                                <small>Coordinates: {{ event.check_out_latitude }}, {{ event.check_out_longitude }}</small>
+                                                <a class="attendance-map-link" href="https://www.google.com/maps?q={{ event.check_out_latitude }},{{ event.check_out_longitude }}" target="_blank" rel="noopener">Open map</a>
+                                            {% endif %}
                                         </div>
                                     </div>
-
-                                    <div class="attendance-record-location-block">
-                                        <strong>Check-in location</strong>
-                                        <span>{{ event.check_in_location_label|default:event.check_in_address|default:"Not captured" }}</span>
-                                        {% if event.check_in_address and event.check_in_address != event.check_in_location_label %}
-                                            <small>{{ event.check_in_address }}</small>
-                                        {% endif %}
-                                        {% if event.check_in_latitude and event.check_in_longitude %}
-                                            <small>Coordinates: {{ event.check_in_latitude }}, {{ event.check_in_longitude }}</small>
-                                            <a class="attendance-map-link" href="https://www.google.com/maps?q={{ event.check_in_latitude }},{{ event.check_in_longitude }}" target="_blank" rel="noopener">Open map</a>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="attendance-record-location-block">
-                                        <strong>Check-out location</strong>
-                                        <span>{{ event.check_out_location_label|default:event.check_out_address|default:"Not captured" }}</span>
-                                        {% if event.check_out_address and event.check_out_address != event.check_out_location_label %}
-                                            <small>{{ event.check_out_address }}</small>
-                                        {% endif %}
-                                        {% if event.check_out_latitude and event.check_out_longitude %}
-                                            <small>Coordinates: {{ event.check_out_latitude }}, {{ event.check_out_longitude }}</small>
-                                            <a class="attendance-map-link" href="https://www.google.com/maps?q={{ event.check_out_latitude }},{{ event.check_out_longitude }}" target="_blank" rel="noopener">Open map</a>
-                                        {% endif %}
-                                    </div>
-                                </div>
+                                </details>
                             {% endfor %}
                         </div>
+
+                        {% if recent_attendance_page_obj and recent_attendance_page_obj.has_other_pages %}
+                            <div class="pagination-wrap attendance-history-pagination-wrap">
+                                <div class="pagination employee-directory-pagination">
+                                    {% if recent_attendance_page_obj.has_previous %}
+                                        <a href="?page={{ recent_attendance_page_obj.previous_page_number }}{% if recent_attendance_querystring %}&{{ recent_attendance_querystring }}{% endif %}" class="btn btn-light btn-sm">Previous</a>
+                                    {% endif %}
+
+                                    <div class="employee-directory-pagination-meta">
+                                        <span class="pagination-info">Page {{ recent_attendance_page_obj.number }} of {{ recent_attendance_page_obj.paginator.num_pages }}</span>
+                                    </div>
+
+                                    <div class="employee-directory-pagination-numbers">
+                                        {% for item in recent_attendance_pagination_items %}
+                                            {% if item.type == "ellipsis" %}
+                                                <span class="employee-directory-page-ellipsis">...</span>
+                                            {% elif item.is_current %}
+                                                <span class="employee-directory-page-number is-active">{{ item.number }}</span>
+                                            {% else %}
+                                                <a href="?page={{ item.number }}{% if recent_attendance_querystring %}&{{ recent_attendance_querystring }}{% endif %}" class="employee-directory-page-number">{{ item.number }}</a>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+
+                                    {% if recent_attendance_page_obj.has_next %}
+                                        <a href="?page={{ recent_attendance_page_obj.next_page_number }}{% if recent_attendance_querystring %}&{{ recent_attendance_querystring }}{% endif %}" class="btn btn-light btn-sm">Next</a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endif %}
                     {% else %}
                         <div class="empty-state">
                             <h3>No attendance records yet</h3>
-                            <p>Your self-service daily attendance with map location history will appear here after the first check-in.</p>
+                            <p>Your self-service attendance history with branch location validation will appear here after the first successful check-in.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -231,12 +310,12 @@
 document.addEventListener("DOMContentLoaded", function () {
     const latitudeField = document.getElementById("id_latitude");
     const longitudeField = document.getElementById("id_longitude");
-    const labelField = document.getElementById("id_location_label");
-    const addressField = document.getElementById("id_location_address");
     const captureButton = document.getElementById("capture-location-btn");
     const clearButton = document.getElementById("clear-location-btn");
     const latitudePreview = document.getElementById("attendance-latitude-preview");
     const longitudePreview = document.getElementById("attendance-longitude-preview");
+    const distancePreview = document.getElementById("attendance-distance-preview");
+    const validationPreview = document.getElementById("attendance-validation-preview");
     const mapStatus = document.getElementById("attendance-map-status");
     const mapElement = document.getElementById("attendance-live-map");
 
@@ -245,12 +324,31 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     let map = null;
-    let marker = null;
+    let branchMarker = null;
+    let branchRadiusCircle = null;
+    let userMarker = null;
     const defaultCenter = [29.3759, 47.9774];
+    const branchLatitude = Number(mapElement.dataset.branchLatitude || 0);
+    const branchLongitude = Number(mapElement.dataset.branchLongitude || 0);
+    const branchRadius = Number(mapElement.dataset.branchRadius || 0);
+    const hasBranchConfig = Boolean(branchLatitude && branchLongitude && branchRadius);
 
     function updatePreview(lat, lng) {
         latitudePreview.textContent = lat ? lat : "Not captured";
         longitudePreview.textContent = lng ? lng : "Not captured";
+    }
+
+    function updateDistancePreview(distanceMeters, isInsideRadius) {
+        if (typeof distanceMeters !== "number" || Number.isNaN(distanceMeters)) {
+            distancePreview.textContent = "Not captured";
+            validationPreview.textContent = "Waiting for live location";
+            return;
+        }
+
+        distancePreview.textContent = distanceMeters + " meters";
+        validationPreview.textContent = isInsideRadius
+            ? "Inside allowed area"
+            : "Outside allowed area";
     }
 
     function setStatus(message, isError) {
@@ -258,20 +356,35 @@ document.addEventListener("DOMContentLoaded", function () {
         mapStatus.classList.toggle("is-error", Boolean(isError));
     }
 
-    function syncMarker(lat, lng, shouldCenter) {
+    function calculateDistanceMeters(latitudeA, longitudeA, latitudeB, longitudeB) {
+        const earthRadiusMeters = 6371000;
+        const toRadians = function (value) {
+            return value * Math.PI / 180;
+        };
+
+        const lat1 = toRadians(latitudeA);
+        const lon1 = toRadians(longitudeA);
+        const lat2 = toRadians(latitudeB);
+        const lon2 = toRadians(longitudeB);
+        const deltaLat = lat2 - lat1;
+        const deltaLon = lon2 - lon1;
+        const haversineValue =
+            Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        const centralAngle = 2 * Math.asin(Math.sqrt(haversineValue));
+        return Math.round(earthRadiusMeters * centralAngle);
+    }
+
+    function syncUserMarker(lat, lng, shouldCenter) {
         if (!map || !window.L) {
             return;
         }
 
         const point = [lat, lng];
-        if (!marker) {
-            marker = window.L.marker(point, { draggable: true }).addTo(map);
-            marker.on("dragend", function (event) {
-                const draggedPoint = event.target.getLatLng();
-                applyLocation(draggedPoint.lat, draggedPoint.lng, true);
-            });
+        if (!userMarker) {
+            userMarker = window.L.marker(point).addTo(map);
         } else {
-            marker.setLatLng(point);
+            userMarker.setLatLng(point);
         }
 
         if (shouldCenter) {
@@ -279,53 +392,50 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    async function reverseGeocode(lat, lng) {
-        const requestUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
-        const response = await fetch(requestUrl, {
-            headers: {
-                "Accept": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error("Reverse geocoding failed.");
-        }
-
-        return response.json();
-    }
-
-    async function applyLocation(lat, lng, shouldCenter) {
+    function applyLocation(lat, lng, shouldCenter) {
         const latValue = Number(lat).toFixed(6);
         const lngValue = Number(lng).toFixed(6);
         latitudeField.value = latValue;
         longitudeField.value = lngValue;
         updatePreview(latValue, lngValue);
-        syncMarker(latValue, lngValue, shouldCenter);
-        setStatus("Location selected. Loading map address...", false);
+        syncUserMarker(latValue, lngValue, shouldCenter);
 
-        try {
-            const result = await reverseGeocode(latValue, lngValue);
-            const displayName = result.display_name || `${latValue}, ${lngValue}`;
-            addressField.value = displayName;
-            if (labelField && !labelField.value.trim()) {
-                labelField.value = result.name || result.address?.road || result.address?.neighbourhood || "Attendance location";
-            }
-            setStatus("Location selected and address captured from the live map.", false);
-        } catch (error) {
-            addressField.value = `${latValue}, ${lngValue}`;
-            setStatus("Location selected. Address lookup could not be completed, but coordinates were saved.", true);
+        if (hasBranchConfig) {
+            const liveDistance = calculateDistanceMeters(
+                Number(latValue),
+                Number(lngValue),
+                branchLatitude,
+                branchLongitude
+            );
+            const isInsideRadius = liveDistance <= branchRadius;
+            updateDistancePreview(liveDistance, isInsideRadius);
+            setStatus(
+                isInsideRadius
+                    ? "Live location captured. Final attendance approval will be confirmed by the backend."
+                    : "Live location captured, but you appear outside the allowed branch attendance radius.",
+                !isInsideRadius
+            );
+            return;
         }
+
+        updateDistancePreview(null, false);
+        setStatus("Live location captured, but branch attendance configuration is missing.", true);
     }
 
     function clearLocation() {
         latitudeField.value = "";
         longitudeField.value = "";
-        addressField.value = "";
         updatePreview("", "");
-        setStatus("Choose a point from the map before saving attendance.", false);
-        if (marker && map) {
-            map.removeLayer(marker);
-            marker = null;
+        updateDistancePreview(null, false);
+        setStatus(
+            hasBranchConfig
+                ? "Capture your live device location before saving attendance."
+                : "Branch attendance configuration is missing.",
+            !hasBranchConfig
+        );
+        if (userMarker && map) {
+            map.removeLayer(userMarker);
+            userMarker = null;
         }
     }
 
@@ -333,30 +443,41 @@ document.addEventListener("DOMContentLoaded", function () {
         map = window.L.map(mapElement, {
             zoomControl: true,
             scrollWheelZoom: true,
-        }).setView(defaultCenter, 12);
+        }).setView(hasBranchConfig ? [branchLatitude, branchLongitude] : defaultCenter, hasBranchConfig ? 16 : 12);
 
         window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
             attribution: "&copy; OpenStreetMap contributors",
         }).addTo(map);
 
-        map.on("click", function (event) {
-            applyLocation(event.latlng.lat, event.latlng.lng, false);
-        });
+        if (hasBranchConfig) {
+            branchMarker = window.L.marker([branchLatitude, branchLongitude]).addTo(map);
+            branchMarker.bindTooltip("Fixed branch attendance point");
+            branchRadiusCircle = window.L.circle([branchLatitude, branchLongitude], {
+                radius: branchRadius,
+                color: "#f97316",
+                weight: 2,
+                fillColor: "#f97316",
+                fillOpacity: 0.14,
+            }).addTo(map);
+        }
 
         const existingLat = latitudeField.value;
         const existingLng = longitudeField.value;
         if (existingLat && existingLng) {
             updatePreview(existingLat, existingLng);
-            syncMarker(existingLat, existingLng, true);
-            setStatus("Saved location loaded on the map.", false);
+            applyLocation(existingLat, existingLng, true);
         }
     } else {
-        setStatus("Live map could not be loaded in this browser. You can still use your current location button.", true);
+        setStatus("Live map could not be loaded in this browser. Device location capture is still required for attendance.", true);
     }
 
     if (captureButton) {
         captureButton.addEventListener("click", function () {
+            if (!hasBranchConfig) {
+                setStatus("Branch attendance configuration is missing. Please contact HR or Operations.", true);
+                return;
+            }
             if (!navigator.geolocation) {
                 setStatus("This browser does not support device geolocation.", true);
                 return;

@@ -997,12 +997,6 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
         choices=EmployeeAttendanceLedger.SHIFT_CHOICES,
         label="Shift",
     )
-    location_label = forms.CharField(required=False, max_length=255, label="Location Note")
-    location_address = forms.CharField(
-        required=False,
-        label="Selected Map Address",
-        widget=forms.Textarea(attrs={"rows": 2, "readonly": "readonly"}),
-    )
     latitude = forms.DecimalField(
         required=False,
         max_digits=9,
@@ -1036,17 +1030,9 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
             existing = widget.attrs.get("class", "")
             if not isinstance(widget, forms.HiddenInput):
                 field.widget.attrs["class"] = f"{existing} form-control".strip()
-        self.fields["location_label"].widget.attrs["placeholder"] = "Optional landmark, gate, or branch note"
-        self.fields["location_address"].widget.attrs["placeholder"] = "Select a point from the live map or use your current location"
 
     def clean_notes(self):
         return (self.cleaned_data.get("notes") or "").strip()
-
-    def clean_location_label(self):
-        return (self.cleaned_data.get("location_label") or "").strip()
-
-    def clean_location_address(self):
-        return (self.cleaned_data.get("location_address") or "").strip()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1054,10 +1040,10 @@ class EmployeeSelfServiceAttendanceForm(forms.Form):
         longitude = cleaned_data.get("longitude")
 
         if (latitude is None) != (longitude is None):
-            raise forms.ValidationError("Both latitude and longitude are required when selecting a map location.")
+            raise forms.ValidationError("Both latitude and longitude are required when capturing live device location.")
 
         if latitude is None or longitude is None:
-            raise forms.ValidationError("Use the live map or your current location before saving attendance.")
+            raise forms.ValidationError("Use your live device location before saving attendance.")
 
         return cleaned_data
 

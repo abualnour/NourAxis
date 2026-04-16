@@ -285,6 +285,30 @@ employee-directory-page .page-header {
     gap: 18px;
 }
 
+.summary-disclosure-card {
+    overflow: hidden;
+}
+
+.summary-disclosure-toggle {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+}
+
+.summary-disclosure-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.summary-disclosure-body {
+    display: grid;
+    gap: 18px;
+    padding: 0 20px 20px;
+}
+
 .employee-requests-page .page-header {
     padding: 22px 24px;
     margin-bottom: 0;
@@ -5846,10 +5870,86 @@ html[data-theme="sunrise"] .profile-modal-form input[type="date"] {
     gap: 14px;
 }
 
+.employee-profile-page .attendance-history-pagination-wrap {
+    margin-top: 18px;
+}
+
 .employee-profile-page .attendance-record-card {
     border: 1px solid var(--border);
     border-radius: 18px;
     background: var(--surface-gradient-3);
+}
+
+.employee-profile-page .attendance-history-disclosure,
+.attendance-management-page .attendance-history-disclosure {
+    overflow: hidden;
+}
+
+.employee-profile-page .attendance-history-summary,
+.attendance-management-page .attendance-history-summary,
+.attendance-management-page .attendance-summary-disclosure-toggle {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+}
+
+.employee-profile-page .attendance-history-summary::-webkit-details-marker,
+.attendance-management-page .attendance-history-summary::-webkit-details-marker,
+.attendance-management-page .attendance-summary-disclosure-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.employee-profile-page .attendance-history-summary-main,
+.employee-profile-page .attendance-history-summary-side,
+.attendance-management-page .attendance-history-summary-main,
+.attendance-management-page .attendance-history-summary-side {
+    display: grid;
+    gap: 6px;
+}
+
+.employee-profile-page .attendance-history-summary-side,
+.attendance-management-page .attendance-history-summary-side {
+    justify-items: end;
+    text-align: right;
+}
+
+.employee-profile-page .attendance-history-summary-meta,
+.attendance-management-page .attendance-history-summary-meta {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.employee-profile-page .attendance-history-panel,
+.attendance-management-page .attendance-history-panel {
+    display: grid;
+    gap: 14px;
+    padding: 0 20px 20px;
+}
+
+.attendance-management-page .attendance-history-card-list {
+    display: grid;
+    gap: 14px;
+}
+
+.attendance-management-page .attendance-management-disclosure {
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface-gradient-3);
+}
+
+.attendance-management-page .attendance-summary-disclosure {
+    overflow: hidden;
+}
+
+.attendance-management-page .attendance-summary-disclosure-body {
+    display: grid;
+    gap: 18px;
+    padding: 0 20px 20px;
 }
 
 .employee-profile-page .attendance-record-location-block {
@@ -5895,6 +5995,24 @@ html[data-theme="sunrise"] .profile-modal-form input[type="date"] {
 
     .employee-profile-page .attendance-live-map {
         min-height: 320px;
+    }
+
+    .employee-profile-page .attendance-history-summary,
+    .attendance-management-page .attendance-history-summary,
+    .attendance-management-page .attendance-summary-disclosure-toggle {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .employee-profile-page .attendance-history-summary-side,
+    .attendance-management-page .attendance-history-summary-side {
+        justify-items: start;
+        text-align: left;
+    }
+
+    .summary-disclosure-toggle {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
 
@@ -7863,6 +7981,40 @@ body[data-theme="premium-dark"] .employee-profile-page.branch-schedule-page .fre
     min-height: 58px !important;
 }
 
+.employee-profile-page.branch-schedule-page .branch-employee-order-item {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    background: var(--surface-gradient-3) !important;
+}
+
+.employee-profile-page.branch-schedule-page .branch-employee-order-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.employee-profile-page.branch-schedule-page .branch-employee-order-copy strong,
+.employee-profile-page.branch-schedule-page .branch-employee-order-copy small {
+    overflow-wrap: anywhere;
+}
+
+.employee-profile-page.branch-schedule-page .branch-employee-order-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.employee-profile-page.branch-schedule-page .branch-employee-order-button {
+    min-width: 64px;
+}
+
 .employee-profile-page.branch-schedule-page .branch-duty-master-order-panel .form-actions {
     margin-top: 14px !important;
 }
@@ -7897,6 +8049,19 @@ body[data-theme="premium-dark"] .employee-profile-page.branch-schedule-page .fre
 
     .employee-profile-page.branch-schedule-page .branch-duty-master-create-form .form-group.form-check {
         padding-top: 0 !important;
+    }
+
+    .employee-profile-page.branch-schedule-page .branch-employee-order-item {
+        grid-template-columns: 1fr !important;
+        align-items: stretch !important;
+    }
+
+    .employee-profile-page.branch-schedule-page .branch-employee-order-controls {
+        justify-content: stretch;
+    }
+
+    .employee-profile-page.branch-schedule-page .branch-employee-order-controls .branch-employee-order-button {
+        flex: 1 1 0;
     }
 }
 

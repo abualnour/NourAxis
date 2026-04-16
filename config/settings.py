@@ -58,6 +58,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.SessionTimeoutMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -151,6 +152,15 @@ AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
+
+SESSION_INACTIVITY_TIMEOUT_SECONDS = int(
+    os.environ.get("DJANGO_SESSION_INACTIVITY_TIMEOUT_SECONDS", "1800")
+)
+SESSION_TIMEOUT_WARNING_SECONDS = int(
+    os.environ.get("DJANGO_SESSION_TIMEOUT_WARNING_SECONDS", "300")
+)
+SESSION_COOKIE_AGE = SESSION_INACTIVITY_TIMEOUT_SECONDS
+SESSION_SAVE_EVERY_REQUEST = False
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
