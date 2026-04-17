@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "operations",
     "hr",
     "payroll",
+    "workcalendar",
 ]
 
 MIDDLEWARE = [

@@ -1,24 +1,42 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Delete Employee{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/employees.css' %}">
+{% endblock %}
+
 {% block content %}
+<div class="employee-admin-page employee-delete-page">
 <div class="page-header">
-    <div>
-        <h1>Delete Employee</h1>
-        <p class="text-muted">This action cannot be undone.</p>
+    <div class="employee-admin-header-main">
+        <h1 class="page-title">Delete Employee</h1>
+        <p class="page-subtitle">This action permanently removes the employee record and cannot be undone.</p>
+    </div>
+    <div class="employee-admin-header-tools">
+        <div class="employee-admin-header-meta">
+            <span class="employee-admin-header-chip">Employee: {{ employee.full_name }}</span>
+            <span class="employee-admin-header-chip">ID: {{ employee.employee_id|default:"Not Assigned" }}</span>
+            <span class="employee-admin-header-chip">Action: Delete</span>
+        </div>
     </div>
 </div>
 
-<div class="card">
+<div class="card detail-card modern-soft-card employee-delete-card">
     <div class="card-body">
-        <p>Are you sure you want to delete <strong>{{ employee.full_name }}</strong> ({{ employee.employee_id }})?</p>
+        <div class="employee-delete-warning">
+            <h2>Confirm permanent deletion</h2>
+            <p>Are you sure you want to delete <strong>{{ employee.full_name }}</strong> ({{ employee.employee_id|default:"No ID" }})?</p>
+            <p class="muted-text">Use cancel if you only need to review or update this employee instead of removing the record.</p>
+        </div>
 
-        <form method="post">
+        <form method="post" class="employee-delete-actions">
             {% csrf_token %}
             <button type="submit" class="btn btn-danger">Yes, Delete</button>
             <a href="{% url 'employees:employee_detail' employee.pk %}?tab=overview" class="btn btn-light">Cancel</a>
         </form>
     </div>
+</div>
 </div>
 {% endblock %}

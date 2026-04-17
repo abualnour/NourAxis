@@ -96,6 +96,16 @@
                             <strong>{{ my_schedule_next_week_entries|length }}</strong>
                         </div>
                     </div>
+                    {% if my_schedule_this_week_holidays or my_schedule_next_week_holidays %}
+                        <div class="employee-360-chip-row">
+                            {% for holiday in my_schedule_this_week_holidays %}
+                                <span class="badge badge-light">This Week | {{ holiday.holiday_date|date:"M j" }} | {{ holiday.title }}</span>
+                            {% endfor %}
+                            {% for holiday in my_schedule_next_week_holidays %}
+                                <span class="badge badge-light">Next Week | {{ holiday.holiday_date|date:"M j" }} | {{ holiday.title }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
             </article>
         </div>

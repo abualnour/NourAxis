@@ -17,6 +17,11 @@
                 {{ payroll_line.payroll_period.title }} |
                 {{ payroll_line.payroll_period.period_start|date:"F j, Y" }} to {{ payroll_line.payroll_period.period_end|date:"F j, Y" }}
             </p>
+            <div class="platform-hero-meta">
+                <span class="platform-hero-chip">Employee ID: {{ payroll_line.employee.employee_id|default:"Not Assigned" }}</span>
+                <span class="platform-hero-chip">Period: {{ payroll_line.payroll_period.get_status_display }}</span>
+                <span class="platform-hero-chip">Net Pay: {{ payroll_line.net_pay }}</span>
+            </div>
         </div>
         <div class="platform-hero-side">
             <div class="platform-side-card">

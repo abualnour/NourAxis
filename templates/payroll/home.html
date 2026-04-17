@@ -14,6 +14,11 @@
             <span class="platform-kicker">Payroll Workspace</span>
             <h1>Payroll structure, pay periods, and salary readiness in one place</h1>
             <p>Build payroll operations directly inside the system with employee payroll profiles, pay periods, line items, and a clearer monthly pay workflow.</p>
+            <div class="platform-hero-meta">
+                <span class="platform-hero-chip">Profiles: {{ payroll_profile_total }}</span>
+                <span class="platform-hero-chip">Draft Periods: {{ draft_period_total }}</span>
+                <span class="platform-hero-chip">Active Obligations: {{ active_obligation_total }}</span>
+            </div>
         </div>
         <div class="platform-hero-side">
             <div class="platform-side-card">
@@ -26,8 +31,58 @@
                 <strong>{{ employees_without_payroll_total }}</strong>
                 <small>Employees without payroll profile</small>
             </div>
+            <div class="platform-inline-actions platform-hero-actions">
+                <a href="#create-period-section" class="btn btn-light btn-sm">Create Period</a>
+                <a href="#recent-periods-section" class="btn btn-secondary btn-sm">Recent Periods</a>
+            </div>
         </div>
     </section>
+
+    {% if focused_employee %}
+    <section class="platform-panel platform-focus-panel">
+        <div class="platform-panel-head">
+            <div>
+                <h2>Employee Payroll Focus</h2>
+                <p>You opened the payroll workspace for {{ focused_employee.full_name }} so you can confirm setup and continue the payroll flow from the right employee context.</p>
+            </div>
+            <div class="platform-inline-actions">
+                <a href="{{ focused_employee_profile_url }}" class="btn btn-light btn-sm">Back to Employee Payroll Tab</a>
+                {% if not focused_payroll_profile %}
+                    <a href="{{ focused_employee_setup_url }}" class="btn btn-primary btn-sm">Create Payroll Profile</a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="platform-focus-grid">
+            <div class="platform-focus-card">
+                <span class="platform-focus-label">Employee</span>
+                <strong>{{ focused_employee.full_name }}</strong>
+                <small>
+                    {{ focused_employee.employee_id }}
+                    {% if focused_employee.company %} | {{ focused_employee.company.name }}{% endif %}
+                    {% if focused_employee.branch %} | {{ focused_employee.branch.name }}{% endif %}
+                </small>
+            </div>
+            <div class="platform-focus-card">
+                <span class="platform-focus-label">Payroll Profile Status</span>
+                {% if focused_payroll_profile %}
+                    <strong>{{ focused_payroll_profile.get_status_display }}</strong>
+                    <small>
+                        Base {{ focused_payroll_profile.base_salary }}
+                        {% if focused_payroll_profile.company %} | {{ focused_payroll_profile.company.name }}{% endif %}
+                    </small>
+                {% else %}
+                    <strong>Setup Needed</strong>
+                    <small>No payroll profile is linked yet, so payroll periods cannot generate salary lines for this employee.</small>
+                {% endif %}
+            </div>
+            <div class="platform-focus-card">
+                <span class="platform-focus-label">Payroll Runs</span>
+                <strong>{{ focused_employee_recent_line_count }}</strong>
+                <small>{% if focused_employee_recent_line_count %}Payroll line record{{ focused_employee_recent_line_count|pluralize }} already linked to this employee.{% else %}No payroll lines have been generated for this employee yet.{% endif %}</small>
+            </div>
+        </div>
+    </section>
+    {% endif %}
 
     <section class="platform-stats-grid">
         <article class="platform-stat-card">
@@ -63,7 +118,7 @@
     </section>
 
     <section class="platform-grid">
-        <article class="platform-panel">
+        <article class="platform-panel" id="create-period-section">
             <div class="platform-panel-head">
                 <h2>Adjustment Reports</h2>
                 <p>Track how much of payroll is being changed by bonuses, loans, penalties, and manual updates.</p>
@@ -84,7 +139,7 @@
             </div>
         </article>
 
-        <article class="platform-panel">
+        <article class="platform-panel" id="recent-periods-section">
             <div class="platform-panel-head">
                 <h2>Company Payroll Activity</h2>
                 <p>See where payroll activity is happening most often.</p>
@@ -228,7 +283,7 @@
             {% endif %}
         </article>
 
-        <article class="platform-panel">
+        <article class="platform-panel" id="employees-missing-payroll-section">
             <div class="platform-panel-head">
                 <h2>Employees Missing Payroll Setup</h2>
             </div>
@@ -240,7 +295,10 @@
                                 <strong>{{ employee.full_name }}</strong>
                                 <small>{{ employee.employee_id }} | {{ employee.branch.name }}</small>
                             </div>
-                            <span class="badge badge-warning">Needs Profile</span>
+                            <div class="platform-inline-actions">
+                                <span class="badge badge-warning">Needs Profile</span>
+                                <a href="{% url 'employees:employee_detail' employee.pk %}?tab=payroll&modal=payroll_information#employee-payroll-section" class="btn btn-light btn-sm">Set Up</a>
+                            </div>
                         </div>
                     {% endfor %}
                 </div>
@@ -252,7 +310,7 @@
             {% endif %}
         </article>
 
-        <article class="platform-panel">
+        <article class="platform-panel" id="payroll-profiles-section">
             <div class="platform-panel-head">
                 <h2>Payroll Profiles</h2>
                 <p>Recently updated payroll setup records across the system.</p>

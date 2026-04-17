@@ -260,7 +260,7 @@ class Employee(models.Model):
 
 
 WORKING_HOURS_PER_DAY = Decimal("8.00")
-WEEKLY_OFF_WEEKDAYS = {4}  # Friday only
+WEEKLY_OFF_WEEKDAYS = {4}  # Company policy default: Friday only
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -301,18 +301,49 @@ def iterate_dates(start_date, end_date):
 def count_policy_working_days(start_date, end_date):
     if not start_date or not end_date or start_date > end_date:
         return 0
+    try:
+        from workcalendar.services import count_working_days
 
-    working_days = 0
-    for current_date in iterate_dates(start_date, end_date):
-        if current_date.weekday() not in WEEKLY_OFF_WEEKDAYS:
-            working_days += 1
-    return working_days
+        return count_working_days(start_date, end_date)
+    except Exception:
+        working_days = 0
+        for current_date in iterate_dates(start_date, end_date):
+            if current_date.weekday() not in WEEKLY_OFF_WEEKDAYS:
+                working_days += 1
+        return working_days
 
 
 def is_policy_working_day(value):
     if not value:
         return False
-    return value.weekday() not in WEEKLY_OFF_WEEKDAYS
+    try:
+        from workcalendar.services import is_working_day
+
+        return is_working_day(value)
+    except Exception:
+        return value.weekday() not in WEEKLY_OFF_WEEKDAYS
+
+
+def is_policy_weekly_off_day(value):
+    if not value:
+        return False
+    try:
+        from workcalendar.services import is_weekly_off_day
+
+        return is_weekly_off_day(value)
+    except Exception:
+        return value.weekday() in WEEKLY_OFF_WEEKDAYS
+
+
+def is_policy_holiday(value):
+    if not value:
+        return False
+    try:
+        from workcalendar.services import is_public_holiday
+
+        return is_public_holiday(value)
+    except Exception:
+        return False
 
 
 def get_lateness_deduction_hours(action_record):
@@ -551,7 +582,7 @@ class EmployeeLeave(models.Model):
     def calculate_total_days(self):
         if not self.start_date or not self.end_date:
             return 0
-        return (self.end_date - self.start_date).days + 1
+        return count_policy_working_days(self.start_date, self.end_date)
 
     def save(self, *args, **kwargs):
         if self.status == self.STATUS_PENDING and not self.current_stage:

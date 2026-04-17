@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Kuwait Work Calendar{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/platform.css' %}">
+<link rel="stylesheet" href="{% static 'css/workcalendar.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="platform-page work-calendar-page">
+    <section class="platform-hero work-calendar-hero">
+        <div class="platform-hero-copy">
+            <span class="platform-kicker">Regional Work Calendar</span>
+            <h1>Kuwait government work calendar, weekly off policy, and official holiday control</h1>
+            <p>Manage the system-wide working-day policy from one secure place so attendance, leave calculations, and date-based workflows follow the same local calendar rules across the platform.</p>
+            <div class="platform-hero-meta">
+                <span class="platform-hero-chip">Year: {{ current_year }}</span>
+                <span class="platform-hero-chip">Holiday Records: {{ holiday_total }}</span>
+                <span class="platform-hero-chip">Weekly Off Days: {{ weekly_off_day_total }}</span>
+                <span class="platform-hero-chip">Holiday Non-Working Days: {{ non_working_holiday_total }}</span>
+                <span class="platform-hero-chip">Total Non-Working: {{ combined_non_working_day_total }}</span>
+                <span class="platform-hero-chip">Working Days: {{ working_day_total }}</span>
+            </div>
+        </div>
+        <div class="platform-hero-side">
+            <div class="platform-side-card">
+                <span>Active Calendar</span>
+                <strong>{{ active_calendar.name }}</strong>
+                <small>{{ active_calendar.region_code }}{% if active_calendar.weekend_day_labels %} | Weekly off: {{ active_calendar.weekend_day_labels|join:", " }}{% endif %}</small>
+            </div>
+            <div class="platform-side-card">
+                <span>Today</span>
+                <strong>{{ today_context.label }}</strong>
+                <small>{% if today_context.holiday %}{{ today_context.holiday.holiday_date|date:"F j, Y" }}{% else %}Live policy classification{% endif %}</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Policy Summary</h2>
+                <p>This is the yearly breakdown the system uses for attendance, leave, and working-day calculations.</p>
+            </div>
+            <div class="work-calendar-summary-grid">
+                <div class="work-calendar-summary-card">
+                    <span class="work-calendar-summary-label">Weekly Off Policy</span>
+                    <strong>{% if active_calendar.weekend_day_labels %}{{ active_calendar.weekend_day_labels|join:", " }}{% else %}Not Set{% endif %}</strong>
+                    <small>{{ weekly_off_day_total }} weekly off day{{ weekly_off_day_total|pluralize }} in {{ current_year }}</small>
+                </div>
+                <div class="work-calendar-summary-card">
+                    <span class="work-calendar-summary-label">Official Holidays</span>
+                    <strong>{{ non_working_holiday_total }}</strong>
+                    <small>Non-working holiday day{{ non_working_holiday_total|pluralize }} saved on this calendar</small>
+                </div>
+                <div class="work-calendar-summary-card">
+                    <span class="work-calendar-summary-label">Observed Entries</span>
+                    <strong>{{ observance_holiday_total }}</strong>
+                    <small>Holiday record{{ observance_holiday_total|pluralize }} that do not block working days</small>
+                </div>
+                <div class="work-calendar-summary-card">
+                    <span class="work-calendar-summary-label">Total Non-Working Days</span>
+                    <strong>{{ combined_non_working_day_total }}</strong>
+                    <small>Weekly off days plus non-working holidays, without double counting</small>
+                </div>
+            </div>
+            <div class="work-calendar-policy-note">
+                <strong>How to read this:</strong>
+                <span>`Holiday Records` means every holiday entry you saved. `Holiday Non-Working Days` counts only holiday entries marked as non-working. `Total Non-Working` combines the weekly off policy with non-working holidays for the selected year.</span>
+            </div>
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Calendar Settings</h2>
+                <p>Keep one active Kuwait work calendar for the whole system. Weekly off days here drive shared working-day calculations.</p>
+            </div>
+            <form method="post" class="platform-form-grid work-calendar-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="calendar_action" value="save_calendar">
+                <div class="form-group platform-form-span">
+                    <label for="{{ calendar_form.name.id_for_label }}">{{ calendar_form.name.label }}</label>
+                    {{ calendar_form.name }}
+                    {% if calendar_form.name.errors %}<div class="form-error">{{ calendar_form.name.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ calendar_form.region_code.id_for_label }}">{{ calendar_form.region_code.label }}</label>
+                    {{ calendar_form.region_code }}
+                    {% if calendar_form.region_code.errors %}<div class="form-error">{{ calendar_form.region_code.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group work-calendar-checkbox-field">
+                    <label>{{ calendar_form.is_active.label }}</label>
+                    <div class="work-calendar-inline-check">
+                        {{ calendar_form.is_active }}
+                        <span>Keep this calendar active across the system.</span>
+                    </div>
+                    {% if calendar_form.is_active.errors %}<div class="form-error">{{ calendar_form.is_active.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group platform-form-span">
+                    <label>{{ calendar_form.weekend_day_selection.label }}</label>
+                    <div class="work-calendar-weekend-grid">
+                        {% for checkbox in calendar_form.weekend_day_selection %}
+                            <label class="work-calendar-weekend-option">
+                                {{ checkbox.tag }}
+                                <span>{{ checkbox.choice_label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                    {% if calendar_form.weekend_day_selection.errors %}<div class="form-error">{{ calendar_form.weekend_day_selection.errors }}</div>{% endif %}
+                </div>
+                <div class="form-group platform-form-span">
+                    <label for="{{ calendar_form.notes.id_for_label }}">{{ calendar_form.notes.label }}</label>
+                    {{ calendar_form.notes }}
+                    {% if calendar_form.notes.errors %}<div class="form-error">{{ calendar_form.notes.errors }}</div>{% endif %}
+                </div>
+                <div class="platform-form-actions">
+                    <button type="submit" class="btn btn-primary">Save Work Calendar</button>
+                </div>
+            </form>
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Add Official Holiday</h2>
+                <p>Add Kuwait holiday dates that should affect working-day rules for attendance, leave, and date-driven calculations.</p>
+            </div>
+            <form method="post" class="platform-form-grid work-calendar-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="calendar_action" value="add_holiday">
+                {% for field in holiday_form %}
+                    <div class="form-group {% if field.name == 'notes' %}platform-form-span{% endif %}">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {% if field.name == 'is_non_working_day' %}
+                            <div class="work-calendar-inline-check">
+                                {{ field }}
+                                <span>Mark this holiday as a non-working day.</span>
+                            </div>
+                        {% else %}
+                            {{ field }}
+                        {% endif %}
+                        {% if field.errors %}<div class="form-error">{{ field.errors }}</div>{% endif %}
+                    </div>
+                {% endfor %}
+                <div class="platform-form-actions">
+                    <button type="submit" class="btn btn-secondary">Add Holiday</button>
+                </div>
+            </form>
+        </article>
+    </section>
+
+    <section class="platform-grid">
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Upcoming Holidays</h2>
+                <p>The next visible holiday dates from the active Kuwait calendar.</p>
+            </div>
+            {% if upcoming_holidays %}
+                <div class="platform-list">
+                    {% for holiday in upcoming_holidays %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ holiday.title }}</strong>
+                                <small>{{ holiday.holiday_date|date:"F j, Y" }} | {{ holiday.get_holiday_type_display }}</small>
+                            </div>
+                            <span class="badge {% if holiday.is_non_working_day %}badge-warning{% else %}badge-light{% endif %}">
+                                {% if holiday.is_non_working_day %}Non-Working{% else %}Observed{% endif %}
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No upcoming holiday dates</h3>
+                    <p>Add official Kuwait holiday dates here so system working-day calculations can reflect them.</p>
+                </div>
+            {% endif %}
+        </article>
+
+        <article class="platform-panel">
+            <div class="platform-panel-head">
+                <h2>Holiday Registry</h2>
+                <p>All holiday dates saved for {{ current_year }} on the active regional calendar.</p>
+            </div>
+            {% if holidays %}
+                <div class="platform-list">
+                    {% for holiday in holidays %}
+                        <div class="platform-list-item">
+                            <div>
+                                <strong>{{ holiday.title }}</strong>
+                                <small>{{ holiday.holiday_date|date:"D, M j, Y" }} | {{ holiday.get_holiday_type_display }}{% if holiday.notes %} | {{ holiday.notes }}{% endif %}</small>
+                            </div>
+                            <div class="platform-inline-actions">
+                                <span class="badge {% if holiday.is_non_working_day %}badge-warning{% else %}badge-light{% endif %}">
+                                    {% if holiday.is_non_working_day %}Non-Working{% else %}Observed{% endif %}
+                                </span>
+                                <form method="post" class="work-calendar-inline-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="calendar_action" value="delete_holiday">
+                                    <input type="hidden" name="holiday_id" value="{{ holiday.pk }}">
+                                    <button type="submit" class="btn btn-light btn-sm">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No holiday dates configured</h3>
+                    <p>Weekly off rules are active, but official holiday dates still need to be added.</p>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+</div>
+{% endblock %}

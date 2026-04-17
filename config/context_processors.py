@@ -53,8 +53,10 @@ def navbar_context(request):
             "nav_self_service_weekly_schedule_url": "",
             "nav_can_view_hr_workspace": False,
             "nav_can_view_payroll_workspace": False,
+            "nav_can_manage_work_calendar": False,
             "nav_hr_workspace_url": "",
             "nav_payroll_workspace_url": "",
+            "nav_work_calendar_url": "",
             "session_timeout_enabled": False,
             "session_timeout_remaining_seconds": 0,
             "session_timeout_total_seconds": 0,
@@ -202,8 +204,12 @@ def navbar_context(request):
         "nav_can_view_payroll_workspace": bool(
             is_admin_compatible or is_hr_user or is_operations_manager_user
         ),
+        "nav_can_manage_work_calendar": bool(
+            is_admin_compatible or is_hr_user
+        ),
         "nav_hr_workspace_url": reverse("hr:home"),
         "nav_payroll_workspace_url": reverse("payroll:home"),
+        "nav_work_calendar_url": reverse("workcalendar:home"),
         "session_timeout_enabled": True,
         "session_timeout_remaining_seconds": session_timeout_remaining_seconds,
         "session_timeout_remaining_label": format_session_remaining_seconds(session_timeout_remaining_seconds),

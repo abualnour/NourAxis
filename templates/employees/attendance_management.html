@@ -126,6 +126,10 @@
                 <span class="summary-label">Policy Weekly Off</span>
                 <span class="summary-value">{{ attendance_snapshot_weekly_off_count }}</span>
             </div>
+            <div class="summary-card">
+                <span class="summary-label">Official Holiday</span>
+                <span class="summary-value">{{ attendance_snapshot_holiday_count|default:"0" }}</span>
+            </div>
         </div>
     </div>
 </details>

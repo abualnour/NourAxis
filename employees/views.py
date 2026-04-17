@@ -87,10 +87,11 @@ from .models import (
     EmployeeRequiredSubmission,
     EmployeeDocumentRequest,
     WORKING_HOURS_PER_DAY,
-    WEEKLY_OFF_WEEKDAYS,
     build_employee_working_time_summary,
     count_policy_working_days,
     get_schedule_week_start,
+    is_policy_holiday,
+    is_policy_weekly_off_day,
 )
 
 FREE_SCHEDULE_GRID_DEFAULT_HEADERS = {
@@ -3463,6 +3464,10 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
             tab="payroll",
             anchor="employee-payroll-section",
         )
+        employee_payroll_workspace_anchor = "payroll-profiles-section" if payroll_profile else "employees-missing-payroll-section"
+        context["employee_payroll_workspace_url"] = (
+            f"{reverse('payroll:home')}?employee={employee.pk}#{employee_payroll_workspace_anchor}"
+        )
         context["employee_360_documents_url"] = build_employee_detail_tab_url(employee, tab="documents")
         context["employee_360_leave_url"] = build_employee_detail_tab_url(employee, tab="leave")
         context["employee_360_compliance_url"] = build_employee_detail_tab_url(employee, tab="compliance")
@@ -3975,11 +3980,15 @@ def self_service_weekly_schedule_page(request):
 
     previous_week_start = selected_week_start - timedelta(days=7)
     next_week_start = selected_week_start + timedelta(days=7)
+    selected_week_end = selected_week_start + timedelta(days=6)
+    from workcalendar.services import get_holidays_for_range
+    selected_week_holidays = get_holidays_for_range(selected_week_start, selected_week_end)
 
     context = build_self_service_page_context(request, employee, current_section="weekly_schedule")
     context.update(build_branch_weekly_schedule_summary(branch, selected_week_start))
     context["branch"] = branch
     context["selected_week_start"] = selected_week_start
+    context["selected_week_holidays"] = selected_week_holidays
     context["previous_week_start"] = previous_week_start
     context["next_week_start"] = next_week_start
     context["today"] = timezone.localdate()
@@ -4033,6 +4042,11 @@ def self_service_my_schedule_page(request):
         employee,
         current_section="my_schedule",
     )
+    from workcalendar.services import get_holidays_for_range
+    this_week_start = get_schedule_week_start(timezone.localdate())
+    next_week_start = this_week_start + timedelta(days=7)
+    context["my_schedule_this_week_holidays"] = get_holidays_for_range(this_week_start, this_week_start + timedelta(days=6))
+    context["my_schedule_next_week_holidays"] = get_holidays_for_range(next_week_start, next_week_start + timedelta(days=6))
     context.update(build_employee_schedule_snapshot(employee))
     context["branch"] = employee.branch
     return render(request, "employees/self_service_my_schedule.html", context)
@@ -5763,13 +5777,18 @@ def build_attendance_history_management_context(request, *, supervisor_history_o
     )
 
     policy_weekly_off_ids = set()
-    if snapshot_date.weekday() in WEEKLY_OFF_WEEKDAYS:
+    policy_holiday_ids = set()
+    if is_policy_holiday(snapshot_date):
+        policy_holiday_ids = {employee.pk for employee in snapshot_unrecorded_employees}
+    elif is_policy_weekly_off_day(snapshot_date):
         policy_weekly_off_ids = {employee.pk for employee in snapshot_unrecorded_employees}
 
     attendance_snapshot_missing_employees = [
         employee
         for employee in snapshot_unrecorded_employees
-        if employee.pk not in approved_leave_ids and employee.pk not in policy_weekly_off_ids
+        if employee.pk not in approved_leave_ids
+        and employee.pk not in policy_weekly_off_ids
+        and employee.pk not in policy_holiday_ids
     ]
     attendance_snapshot_leave_covered_employees = [
         employee for employee in snapshot_unrecorded_employees if employee.pk in approved_leave_ids
@@ -5778,6 +5797,11 @@ def build_attendance_history_management_context(request, *, supervisor_history_o
         employee
         for employee in snapshot_unrecorded_employees
         if employee.pk in policy_weekly_off_ids and employee.pk not in approved_leave_ids
+    ]
+    attendance_snapshot_holiday_employees = [
+        employee
+        for employee in snapshot_unrecorded_employees
+        if employee.pk in policy_holiday_ids and employee.pk not in approved_leave_ids
     ]
 
     paginator = Paginator(attendance_display_records, 25)
@@ -5911,6 +5935,7 @@ def build_attendance_history_management_context(request, *, supervisor_history_o
         "attendance_snapshot_missing_count": len(attendance_snapshot_missing_employees),
         "attendance_snapshot_leave_covered_count": len(attendance_snapshot_leave_covered_employees),
         "attendance_snapshot_weekly_off_count": len(attendance_snapshot_weekly_off_employees),
+        "attendance_snapshot_holiday_count": len(attendance_snapshot_holiday_employees),
         "attendance_snapshot_missing_employees": attendance_snapshot_missing_employees[:12],
         "attendance_snapshot_missing_more_count": max(len(attendance_snapshot_missing_employees) - 12, 0),
         "attendance_snapshot_is_single_day": snapshot_is_single_day,

@@ -1,0 +1,50 @@
+input[type="date"],
+.form-control[type="date"] {
+    min-height: 50px;
+    padding-right: 48px !important;
+    border-radius: 14px;
+    background-repeat: no-repeat !important;
+    background-position: right 14px center !important;
+    background-size: 18px 18px !important;
+    cursor: pointer;
+}
+
+html[data-theme="premium-dark"] input[type="date"],
+html[data-theme="dark-accent"] input[type="date"],
+html[data-theme="premium-dark"] .form-control[type="date"],
+html[data-theme="dark-accent"] .form-control[type="date"] {
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f4a261' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E") !important;
+}
+
+html[data-theme="premium-light"] input[type="date"],
+html[data-theme="sunrise"] input[type="date"],
+html[data-theme="premium-light"] .form-control[type="date"],
+html[data-theme="sunrise"] .form-control[type="date"] {
+    color-scheme: light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6472' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E") !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+.form-control[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.02 !important;
+    width: 42px;
+    height: 100%;
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field,
+.form-control[type="date"]::-webkit-datetime-edit,
+.form-control[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.form-control[type="date"]::-webkit-datetime-edit-text,
+.form-control[type="date"]::-webkit-datetime-edit-month-field,
+.form-control[type="date"]::-webkit-datetime-edit-day-field,
+.form-control[type="date"]::-webkit-datetime-edit-year-field {
+    color: inherit !important;
+}
+

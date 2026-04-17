@@ -1,0 +1,98 @@
+.work-calendar-page {
+    gap: 18px;
+}
+
+.work-calendar-hero {
+    background:
+        radial-gradient(circle at top right, rgba(245, 158, 11, 0.14), transparent 30%),
+        radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.12), transparent 32%),
+        var(--surface-hero-gradient);
+}
+
+.work-calendar-form-grid {
+    align-items: start;
+}
+
+.work-calendar-inline-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 10px 0;
+    color: var(--color-text-soft);
+}
+
+.work-calendar-weekend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.work-calendar-weekend-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-surface-soft);
+    color: var(--color-text);
+}
+
+.work-calendar-inline-form {
+    margin: 0;
+}
+
+.work-calendar-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.work-calendar-summary-card {
+    display: grid;
+    gap: 8px;
+    padding: 18px 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    background: var(--color-surface-soft);
+}
+
+.work-calendar-summary-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.work-calendar-summary-card strong {
+    font-size: 1.2rem;
+    line-height: 1.15;
+    color: var(--color-text);
+}
+
+.work-calendar-summary-card small {
+    color: var(--color-text-soft);
+    line-height: 1.6;
+}
+
+.work-calendar-policy-note {
+    display: grid;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-soft);
+    color: var(--color-text-soft);
+}
+
+@media (max-width: 700px) {
+    .work-calendar-summary-grid,
+    .work-calendar-weekend-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -14,6 +14,11 @@
             <span class="platform-kicker">Payroll Period</span>
             <h1>{{ payroll_period.title }}</h1>
             <p>{{ payroll_period.company.name }} | {{ payroll_period.period_start|date:"F j, Y" }} to {{ payroll_period.period_end|date:"F j, Y" }}{% if payroll_period.pay_date %} | Pay date {{ payroll_period.pay_date|date:"F j, Y" }}{% endif %}</p>
+            <div class="platform-hero-meta">
+                <span class="platform-hero-chip">Status: {{ payroll_period.get_status_display }}</span>
+                <span class="platform-hero-chip">Employees: {{ lines|length }}</span>
+                <span class="platform-hero-chip">Net: {{ total_net|default:"0.00" }}</span>
+            </div>
         </div>
         <div class="platform-hero-side">
             <div class="platform-side-card">
@@ -25,6 +30,10 @@
                 <span>Employees</span>
                 <strong>{{ lines|length }}</strong>
                 <small>Payroll lines in this period</small>
+            </div>
+            <div class="platform-inline-actions platform-hero-actions">
+                <a href="{% url 'payroll:home' %}" class="btn btn-light btn-sm">Payroll Home</a>
+                <a href="#payroll-lines-section" class="btn btn-secondary btn-sm">Payroll Lines</a>
             </div>
         </div>
     </section>
@@ -48,7 +57,7 @@
         </article>
     </section>
 
-    <section class="platform-panel">
+    <section class="platform-panel" id="payroll-lines-section">
         <div class="platform-panel-head">
             <h2>Period Adjustments</h2>
             <p>Bonuses, penalties, loans, advances, and manual corrections linked to this payroll period.</p>

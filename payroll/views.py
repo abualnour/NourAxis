@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from employees.models import Employee, EmployeeAttendanceLedger
 
@@ -222,6 +223,30 @@ def payroll_home(request):
         for obligation in PayrollObligation.objects.filter(status=PayrollObligation.STATUS_ACTIVE)
     )
 
+    focused_employee = None
+    focused_payroll_profile = None
+    focused_employee_profile_url = ""
+    focused_employee_setup_url = ""
+    focused_employee_recent_line_count = 0
+    employee_focus_token = (request.GET.get("employee") or "").strip()
+    if employee_focus_token.isdigit():
+        focused_employee = Employee.objects.select_related("company", "branch", "job_title").filter(
+            pk=int(employee_focus_token)
+        ).first()
+        if focused_employee:
+            focused_payroll_profile = PayrollProfile.objects.select_related("company").filter(
+                employee=focused_employee
+            ).first()
+            focused_employee_profile_url = (
+                f"{reverse('employees:employee_detail', kwargs={'pk': focused_employee.pk})}"
+                "?tab=payroll#employee-payroll-section"
+            )
+            focused_employee_setup_url = (
+                f"{reverse('employees:employee_detail', kwargs={'pk': focused_employee.pk})}"
+                "?tab=payroll&modal=payroll_information#employee-payroll-section"
+            )
+            focused_employee_recent_line_count = PayrollLine.objects.filter(employee=focused_employee).count()
+
     context = {
         "workspace_title": "Payroll Workspace",
         "payroll_profile_total": payroll_profiles.count(),
@@ -244,6 +269,11 @@ def payroll_home(request):
         "deduction_adjustments_total": deduction_adjustments_total,
         "active_obligation_total": active_obligation_total,
         "outstanding_obligation_balance": outstanding_obligation_balance,
+        "focused_employee": focused_employee,
+        "focused_payroll_profile": focused_payroll_profile,
+        "focused_employee_profile_url": focused_employee_profile_url,
+        "focused_employee_setup_url": focused_employee_setup_url,
+        "focused_employee_recent_line_count": focused_employee_recent_line_count,
         "period_form": period_form,
         "generation_form": generation_form,
         "obligation_form": obligation_form,

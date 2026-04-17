@@ -1,0 +1,95 @@
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+
+from employees.access import is_admin_compatible as is_admin_compatible_role, is_hr_user as is_hr_user_role
+
+from .forms import RegionalHolidayForm, RegionalWorkCalendarForm
+from .models import RegionalHoliday, RegionalWorkCalendar
+from .services import build_work_calendar_overview, get_active_calendar, recalculate_employee_leave_totals
+
+
+def can_manage_work_calendar(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (is_admin_compatible_role(user) or is_hr_user_role(user))
+    )
+
+
+@login_required
+def work_calendar_home(request):
+    if not can_manage_work_calendar(request.user):
+        raise PermissionDenied("You do not have permission to manage the work calendar.")
+
+    active_calendar = get_active_calendar() or RegionalWorkCalendar(
+        name="Kuwait Government Work Calendar",
+        region_code="KW",
+        weekend_days="4",
+        is_active=True,
+    )
+
+    calendar_form = RegionalWorkCalendarForm(instance=active_calendar)
+    holiday_form = RegionalHolidayForm()
+
+    if request.method == "POST":
+        action = (request.POST.get("calendar_action") or "").strip()
+
+        if action == "save_calendar":
+            calendar_form = RegionalWorkCalendarForm(request.POST, instance=active_calendar)
+            if calendar_form.is_valid():
+                saved_calendar = calendar_form.save()
+                recalculated_count = recalculate_employee_leave_totals()
+                messages.success(request, "Regional work calendar saved successfully.")
+                if recalculated_count:
+                    messages.info(request, f"Updated {recalculated_count} existing leave record totals to match the active calendar.")
+                return redirect("workcalendar:home")
+            messages.error(request, "Please review the work calendar settings and try again.")
+        elif action == "add_holiday":
+            holiday_form = RegionalHolidayForm(request.POST)
+            if holiday_form.is_valid():
+                active_calendar = get_active_calendar() or active_calendar
+                if not active_calendar.pk:
+                    messages.error(request, "Save the active Kuwait work calendar before adding holidays.")
+                else:
+                    holiday = holiday_form.save(commit=False)
+                    holiday.calendar = active_calendar
+                    holiday.save()
+                    messages.success(request, f"{holiday.title} added to the work calendar.")
+                    recalculated_count = recalculate_employee_leave_totals()
+                    if recalculated_count:
+                        messages.info(request, f"Updated {recalculated_count} existing leave record totals after the holiday change.")
+                    return redirect("workcalendar:home")
+            else:
+                messages.error(request, "Please review the holiday entry and try again.")
+        elif action == "delete_holiday":
+            holiday = get_object_or_404(RegionalHoliday, pk=request.POST.get("holiday_id"))
+            holiday_title = holiday.title
+            holiday.delete()
+            messages.success(request, f"{holiday_title} was removed from the work calendar.")
+            recalculated_count = recalculate_employee_leave_totals()
+            if recalculated_count:
+                messages.info(request, f"Updated {recalculated_count} existing leave record totals after the holiday change.")
+            return redirect("workcalendar:home")
+
+    today = timezone.localdate()
+    overview = build_work_calendar_overview(today.year)
+    holidays = overview["holidays"]
+    upcoming_holidays = [holiday for holiday in holidays if holiday.holiday_date >= today][:10]
+
+    context = {
+        "workspace_title": "Kuwait Work Calendar",
+        "calendar_form": calendar_form,
+        "holiday_form": holiday_form,
+        "active_calendar": get_active_calendar() or active_calendar,
+        "current_year": overview["current_year"],
+        "holiday_total": overview["holiday_total"],
+        "non_working_holiday_total": overview["non_working_holiday_total"],
+        "working_day_total": overview["working_day_total"],
+        "today_context": overview["today_context"],
+        "holidays": holidays,
+        "upcoming_holidays": upcoming_holidays,
+    }
+    return render(request, "workcalendar/home.html", context)

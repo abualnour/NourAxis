@@ -15,6 +15,11 @@
             <span class="platform-kicker">HR Control Center</span>
             <h1>One command page for people operations, payroll pressure, attendance risk, and compliance</h1>
             <p>Use this control center to read today’s HR load fast, respond to employee movement, and keep payroll, leave, documents, and compliance work connected in one operational screen.</p>
+            <div class="platform-hero-meta">
+                <span class="platform-hero-chip">Workforce: {{ employee_total }}</span>
+                <span class="platform-hero-chip">Urgent Load: {{ pending_leave_total|add:attendance_exception_total|add:pending_attendance_correction_total }}</span>
+                <span class="platform-hero-chip">Payroll Cycles: {{ active_payroll_period_total }}</span>
+            </div>
         </div>
         <div class="platform-hero-side">
             <div class="platform-side-card">
@@ -26,6 +31,10 @@
                 <span>Urgent HR Load</span>
                 <strong>{{ pending_leave_total|add:attendance_exception_total|add:pending_attendance_correction_total }}</strong>
                 <small>Leave, attendance, and correction items active today</small>
+            </div>
+            <div class="platform-inline-actions platform-hero-actions hr-hero-actions">
+                <a href="#hr-leave-queue" class="btn btn-light btn-sm">Leave Queue</a>
+                <a href="#hr-compliance-alerts" class="btn btn-secondary btn-sm">Compliance Alerts</a>
             </div>
         </div>
     </section>
@@ -152,7 +161,7 @@
     </section>
 
     <section class="platform-grid">
-        <article class="platform-panel">
+        <article class="platform-panel" id="hr-leave-queue">
             <div class="platform-panel-head">
                 <h2>Leave Queue</h2>
                 <p>Pending leave approvals that need HR attention.</p>
@@ -202,7 +211,7 @@
             {% endif %}
         </article>
 
-        <article class="platform-panel">
+        <article class="platform-panel" id="hr-compliance-alerts">
             <div class="platform-panel-head">
                 <h2>Correction Queue</h2>
                 <p>Attendance corrections waiting to be reviewed or applied.</p>

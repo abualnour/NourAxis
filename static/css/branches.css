@@ -69,20 +69,35 @@
 .branch-documents-page-shell {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 18px;
 }
 
 .branch-documents-hero-clean {
-    max-width: 1180px;
-    margin-bottom: 12px;
+    width: 100%;
+    max-width: none;
+    display: grid;
+    gap: 0;
+    padding: 26px 28px;
+    margin-bottom: 0;
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--color-bg-radial) 52%, transparent), transparent 34%),
+        linear-gradient(180deg, color-mix(in srgb, var(--color-surface-2) 95%, transparent) 0%, color-mix(in srgb, var(--color-surface-3) 99%, transparent) 100%);
+    box-shadow: var(--shadow-sm);
 }
 
 .branch-documents-header-centered .page-title {
     margin-bottom: 10px;
+    font-size: clamp(2rem, 3.3vw, 2.8rem);
+    letter-spacing: -0.045em;
 }
 
 .branch-documents-header-centered .page-subtitle {
-    max-width: 1180px;
+    max-width: 1080px;
+    color: var(--color-text-soft);
+    font-size: 0.97rem;
+    line-height: 1.75;
 }
 
 .branch-documents-header-actions,
@@ -90,8 +105,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-top: 18px;
-    margin-bottom: 8px;
+    margin-top: 20px;
+    margin-bottom: 0;
 }
 
 .branch-documents-summary-grid-centered {
@@ -508,9 +523,23 @@
 }
 
 .org-page-header.org-page-header-spacious {
+    display: flex;
+    justify-content: space-between;
     align-items: flex-start;
     gap: 14px;
+    padding: 22px 24px;
     margin-bottom: 0;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: var(--surface-gradient-1);
+    box-shadow: var(--shadow-sm);
+}
+
+.org-page-header.org-page-header-spacious > div:first-child {
+    flex: 1 1 620px;
+    min-width: 0;
+    display: grid;
+    gap: 6px;
 }
 
 .org-page-subtitle-wide {
@@ -518,8 +547,10 @@
 }
 
 .org-page-actions-top {
+    flex: 0 0 auto;
     flex-wrap: wrap;
     justify-content: flex-end;
+    align-self: end;
     gap: 10px;
 }
 
@@ -1194,6 +1225,11 @@
 
     .org-page-actions-top {
         justify-content: flex-start;
+    }
+
+    .branch-documents-hero-clean {
+        padding: 22px 20px;
+        border-radius: 24px;
     }
 
     .org-metric-card,

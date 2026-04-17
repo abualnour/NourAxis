@@ -62,6 +62,13 @@
                         <a class="btn btn-light" href="?week={{ next_week_start|date:'Y-m-d' }}">Next Week</a>
                         <a class="btn btn-secondary" href="?week={{ today|default:selected_week_start|date:'Y-m-d' }}">Current Week</a>
                     </div>
+                    {% if selected_week_holidays %}
+                        <div class="employee-360-chip-row">
+                            {% for holiday in selected_week_holidays %}
+                                <span class="badge badge-light">{{ holiday.holiday_date|date:"M j" }} | {{ holiday.title }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
             </article>
 

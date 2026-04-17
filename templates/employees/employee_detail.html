@@ -1981,7 +1981,7 @@
                                     aria-label="{{ profile_section_actions.payroll_information.title }}"
                                 >
                                     <span class="section-edit-button-icon">✎</span>
-                                    <span class="section-edit-button-text">{{ profile_section_actions.payroll_information.label }}</span>
+                                    <span class="section-edit-button-text">{% if employee_payroll_profile %}{{ profile_section_actions.payroll_information.label }}{% else %}Set up payroll{% endif %}</span>
                                 </button>
                             {% endif %}
                         </div>
@@ -2015,6 +2015,9 @@
                                     </div>
                                 {% else %}
                                     <span class="detail-value">No payroll profile linked yet.</span>
+                                    <p class="detail-note payroll-setup-note">
+                                        This employee has not been connected to a payroll setup yet, so payroll runs cannot be generated from this profile until payroll information is saved.
+                                    </p>
                                     <div class="status-badge-stack payroll-snapshot-badges">
                                         <span class="badge badge-warning">Setup Needed</span>
                                     </div>
@@ -2031,9 +2034,17 @@
                                         —
                                     {% endif %}
                                 </span>
+                                {% if not employee_payroll_profile and employee.salary %}
+                                    <p class="detail-note payroll-setup-note">
+                                        This amount is currently coming from the employee salary field only. It is not linked to an active payroll profile yet.
+                                    </p>
+                                {% endif %}
                                 <div class="page-actions document-actions-row payroll-snapshot-actions">
+                                    {% if can_use_profile_section_edit and not employee_payroll_profile %}
+                                        <button type="button" class="btn btn-secondary btn-sm" data-modal-open="payroll-information-modal">Set Up Payroll Profile</button>
+                                    {% endif %}
                                     {% if nav_can_view_payroll_workspace %}
-                                        <a class="btn btn-light btn-sm" href="{{ employee_360_payroll_url }}">Open Payroll Workspace</a>
+                                        <a class="btn btn-light btn-sm" href="{{ employee_payroll_workspace_url }}">Open Payroll Workspace</a>
                                     {% endif %}
                                     {% if employee_payroll_lines %}
                                         <span class="badge badge-light">{{ employee_payroll_line_count }} recent payroll run{{ employee_payroll_line_count|pluralize }}</span>
@@ -2097,7 +2108,13 @@
                         {% else %}
                             <div class="empty-state compact-empty-state payroll-snapshot-empty">
                                 <h3>No payroll runs yet</h3>
-                                <p>Generated payroll periods for this employee will appear here once the payroll engine creates salary lines.</p>
+                                <p>
+                                    {% if employee_payroll_profile %}
+                                        Generated payroll periods for this employee will appear here once the payroll engine creates salary lines.
+                                    {% else %}
+                                        This employee does not have a payroll profile yet. Create the payroll setup first, then generated payroll periods and salary lines will appear here.
+                                    {% endif %}
+                                </p>
                             </div>
                         {% endif %}
                     </div>
@@ -2323,8 +2340,8 @@
             <div class="profile-modal-header">
                 <div>
                     <span class="profile-modal-eyebrow">Employee Profile Section</span>
-                    <h2 id="payroll-information-modal-title">Edit Payroll Profile</h2>
-                    <p class="page-subtitle">Manage salary structure, payroll status, deductions, and payment details without leaving the employee profile.</p>
+                    <h2 id="payroll-information-modal-title">{% if employee_payroll_profile %}Edit Payroll Profile{% else %}Create Payroll Profile{% endif %}</h2>
+                    <p class="page-subtitle">{% if employee_payroll_profile %}Manage salary structure, payroll status, deductions, and payment details without leaving the employee profile.{% else %}Create the employee payroll setup here so payroll periods can generate salary lines correctly.{% endif %}</p>
                 </div>
                 <button type="button" class="profile-modal-close" data-modal-close="payroll-information-modal" aria-label="Close payroll profile editor">×</button>
             </div>
