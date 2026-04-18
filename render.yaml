@@ -3,7 +3,7 @@ services:
     name: nouraxis
     runtime: python
     buildCommand: "bash build.sh"
-    startCommand: "gunicorn config.wsgi:application"
+    startCommand: "gunicorn config.wsgi:application -c gunicorn.conf.py"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.10

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 
@@ -11,27 +12,43 @@ SECRET_KEY = os.environ.get(
 )
 
 render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+railway_host = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
 default_debug = "False" if os.environ.get("RENDER") else "True"
 DEBUG = os.environ.get("DJANGO_DEBUG", default_debug).lower() in {"1", "true", "yes", "on"}
 
-allowed_hosts = {
-    host.strip()
-    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-    if host.strip()
-}
-if render_host:
-    allowed_hosts.add(render_host)
+def _split_env_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _extract_host_from_url(url: str) -> str:
+    parsed = urlparse(url)
+    return (parsed.hostname or "").strip()
+
+
+def _normalize_origin(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return ""
+
+
+explicit_public_url = os.environ.get("DJANGO_PUBLIC_BASE_URL", "").strip()
+
+allowed_hosts = set(_split_env_list(os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")))
+for derived_host in (render_host, railway_host, _extract_host_from_url(explicit_public_url)):
+    if derived_host:
+        allowed_hosts.add(derived_host)
 ALLOWED_HOSTS = sorted(allowed_hosts)
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin.strip()
-]
-if render_host:
-    render_origin = f"https://{render_host}"
-    if render_origin not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(render_origin)
+csrf_trusted_origins = set(_split_env_list(os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "")))
+for derived_origin in (
+    f"https://{render_host}" if render_host else "",
+    f"https://{railway_host}" if railway_host else "",
+    _normalize_origin(explicit_public_url),
+):
+    if derived_origin:
+        csrf_trusted_origins.add(derived_origin)
+CSRF_TRUSTED_ORIGINS = sorted(csrf_trusted_origins)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -140,9 +157,13 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = "/media/"
-if os.environ.get("RENDER_DISK_MOUNT_PATH"):
-    MEDIA_ROOT = Path(os.environ["RENDER_DISK_MOUNT_PATH"])
+MEDIA_URL = os.environ.get("DJANGO_MEDIA_URL", "/media/")
+if os.environ.get("DJANGO_MEDIA_ROOT"):
+    MEDIA_ROOT = Path(os.environ["DJANGO_MEDIA_ROOT"])
+elif os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+    MEDIA_ROOT = Path(os.environ["RAILWAY_VOLUME_MOUNT_PATH"]) / "media"
+elif os.environ.get("RENDER_DISK_MOUNT_PATH"):
+    MEDIA_ROOT = Path(os.environ["RENDER_DISK_MOUNT_PATH"]) / "media"
 else:
     MEDIA_ROOT = BASE_DIR / "media"
 
@@ -164,6 +185,7 @@ SESSION_COOKIE_AGE = SESSION_INACTIVITY_TIMEOUT_SECONDS
 SESSION_SAVE_EVERY_REQUEST = False
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -179,7 +201,14 @@ if not DEBUG:
 # Change this folder if you want backups saved somewhere else.
 # Example on Windows:
 # HR_BACKUP_ROOT = Path(r"C:/Users/AbuNour/Desktop/HR_System_Backups")
-HR_BACKUP_ROOT = Path.home() / "Desktop" / "NourAxis_Backups"
+if os.environ.get("HR_BACKUP_ROOT"):
+    HR_BACKUP_ROOT = Path(os.environ["HR_BACKUP_ROOT"])
+elif os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+    HR_BACKUP_ROOT = Path(os.environ["RAILWAY_VOLUME_MOUNT_PATH"]) / "backups"
+elif os.environ.get("RENDER_DISK_MOUNT_PATH"):
+    HR_BACKUP_ROOT = Path(os.environ["RENDER_DISK_MOUNT_PATH"]) / "backups"
+else:
+    HR_BACKUP_ROOT = Path.home() / "Desktop" / "NourAxis_Backups"
 
 # Only these project items will be included in the generated zip.
 HR_BACKUP_INCLUDE_PATHS = [
